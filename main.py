@@ -9,22 +9,22 @@ import threading
 from datetime import datetime
 from configparser import ConfigParser
 
-# ========== رنگها (فارسی) ==========
-سبز = '\033[92m'
-زرد = '\033[93m'
-قرمز = '\033[91m'
-آبی = '\033[94m'
-فیروزه = '\033[96m'
-بنفش = '\033[95m'
-سفید = '\033[97m'
-پایان = '\033[0m'
-پررنگ = '\033[1m'
+# ========== رنگها ==========
+G = '\033[92m'  # سبز
+Y = '\033[93m'  # زرد
+R = '\033[91m'  # قرمز
+B = '\033[94m'  # آبی
+C = '\033[96m'  # فیروزه ای
+M = '\033[95m'  # بنفش
+W = '\033[97m'  # سفید
+X = '\033[0m'   # پایان
+Z = '\033[1m'   # پررنگ
 
 # ========== کادر ==========
-بالا = f"{فیروزه}╔═══════════════════════════════════════════════════════════════════════╗{پایان}"
-وسط = f"{فیروزه}║{پایان}"
-پایین = f"{فیروزه}╚═══════════════════════════════════════════════════════════════════════╝{پایان}"
-خط = f"{فیروزه}╟───────────────────────────────────────────────────────────────────────╢{پایان}"
+UP = f"{C}╔═══════════════════════════════════════════════════════════════════════╗{X}"
+MD = f"{C}║{X}"
+DN = f"{C}╚═══════════════════════════════════════════════════════════════════════╝{X}"
+LN = f"{C}╟───────────────────────────────────────────────────────────────────────╢{X}"
 
 # ========== نصب کتابخانه ==========
 try:
@@ -33,38 +33,37 @@ except:
     os.system('pip install requests > /dev/null 2>&1')
     import requests
 
-# ========== لوگوی بزرگ ==========
-def لوگو():
+# ========== لوگو ==========
+def logo():
     os.system('clear')
-    طرح = f"""
-{پررنگ}{فیروزه}╔═══════════════════════════════════════════════════════════════════════╗
+    print(f"""
+{Z}{C}╔═══════════════════════════════════════════════════════════════════════╗
 ║                                                                       ║
-║        {سبز}██╗ ██████╗ ██╗   ██╗ █████╗     ██╗   ██╗██╗██╗██╗{فیروزه}           ║
-║        {سبز}██║██╔═══██╗╚██╗ ██╔╝██╔══██╗    ██║   ██║██║██║██║{فیروزه}           ║
-║        {سبز}██║██║   ██║ ╚████╔╝ ███████║    ██║   ██║██║██║██║{فیروزه}           ║
-║        {سبز}██║██║   ██║  ╚██╔╝  ██╔══██║    ╚██╗ ██╔╝██║██║██║{فیروزه}           ║
-║        {سبز}██║╚██████╔╝   ██║   ██║  ██║     ╚████╔╝ ██║██║██║{فیروزه}           ║
-║        {سبز}╚═╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝      ╚═══╝  ╚═╝╚═╝╚═╝{فیروزه}           ║
+║        {G}██╗ ██████╗ ██╗   ██╗ █████╗     ██╗   ██╗██╗██╗██╗{C}           ║
+║        {G}██║██╔═══██╗╚██╗ ██╔╝██╔══██╗    ██║   ██║██║██║██║{C}           ║
+║        {G}██║██║   ██║ ╚████╔╝ ███████║    ██║   ██║██║██║██║{C}           ║
+║        {G}██║██║   ██║  ╚██╔╝  ██╔══██║    ╚██╗ ██╔╝██║██║██║{C}           ║
+║        {G}██║╚██████╔╝   ██║   ██║  ██║     ╚████╔╝ ██║██║██║{C}           ║
+║        {G}╚═╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝      ╚═══╝  ╚═╝╚═╝╚═╝{C}           ║
 ║                                                                       ║
-║                    {زرد}██╗   ██╗██╗███████╗██╗{فیروزه}                           ║
-║                    {زرد}██║   ██║██║██╔════╝██║{فیروزه}                           ║
-║                    {زرد}██║   ██║██║█████╗  ██║{فیروزه}                           ║
-║                    {زرد}╚██╗ ██╔╝██║██╔══╝  ██║{فیروزه}                           ║
-║                    {زرد} ╚████╔╝ ██║███████╗██║{فیروزه}                           ║
-║                    {زرد}  ╚═══╝  ╚═╝╚══════╝╚═╝{فیروزه}                           ║
+║                    {Y}██╗   ██╗██╗███████╗██╗{C}                           ║
+║                    {Y}██║   ██║██║██╔════╝██║{C}                           ║
+║                    {Y}██║   ██║██║█████╗  ██║{C}                           ║
+║                    {Y}╚██╗ ██╔╝██║██╔══╝  ██║{C}                           ║
+║                    {Y} ╚████╔╝ ██║███████╗██║{C}                           ║
+║                    {Y}  ╚═══╝  ╚═╝╚══════╝╚═╝{C}                           ║
 ║                                                                       ║
-║                 {سبز}⚡ {پررنگ}جویا ویو ۳.۰{پایان}{سبز} ⚡{فیروزه}                           ║
-╚═══════════════════════════════════════════════════════════════════════╝{پایان}
-"""
-    print(طرح)
+║                 {G}⚡ {Z}جویا ویو ۳.۰{X}{G} ⚡{C}                           ║
+╚═══════════════════════════════════════════════════════════════════════╝{X}
+""")
 
 # ========== تنظیمات ==========
-تعداد_رشته = 200
-زمان_تایم اوت = 15
-کاربر = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36'
+MAX_THREADS = 200
+TIMEOUT = 15
+USER_AGENT = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36'
 
 # ========== الگوی پروکسی ==========
-الگو = re.compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
+PROXY_REGEX = re.compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
                 + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
                 + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
                 + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
@@ -73,40 +72,40 @@ def لوگو():
                 + r")(?:\D|$)")
 
 # ========== کلاس اصلی ==========
-class جویا:
+class JoyaView:
     def __init__(self):
-        self.http = []
-        self.socks4 = []
-        self.socks5 = []
+        self.http_list = []
+        self.socks4_list = []
+        self.socks5_list = []
         
         # آمار
-        self.کل = 0
-        self.فعال = 0
-        self.ارسال = 0
-        self.ناموفق = 0
-        self.توکن_خراب = 0
-        self.خطا = 0
-        self.ویو_فعلی = "0"
+        self.total = 0
+        self.active = 0
+        self.sent = 0
+        self.failed = 0
+        self.bad_token = 0
+        self.proxy_error = 0
+        self.current_views = "0"
         
         # اطلاعات
-        self.کانال = ""
-        self.شماره = 0
-        self.شروع = time.time()
-        self.درحال = True
-        self.قفل = threading.Lock()
+        self.channel = ""
+        self.post_id = ""
+        self.start_time = time.time()
+        self.running = True
+        self.lock = threading.Lock()
         
         # منابع
-        self.http_منبع = []
-        self.socks4_منبع = []
-        self.socks5_منبع = []
+        self.http_sources = []
+        self.socks4_sources = []
+        self.socks5_sources = []
         
         # فایل خطا
-        self.خطاها = None
+        self.error_file = None
     
-    def بارگذاری(self):
-        """خواندن config.ini"""
+    def load_config(self):
+        """خواندن فایل config.ini"""
         if not os.path.exists('config.ini'):
-            print(f"{قرمز}{وسط}  فایل config.ini پیدا نشد!                 {پایین}")
+            print(f"{R}{MD}  فایل config.ini پیدا نشد!                 {DN}")
             return False
         
         try:
@@ -114,258 +113,258 @@ class جویا:
             cfg.read('config.ini', encoding='utf-8')
             
             if 'HTTP' in cfg:
-                منبع = cfg['HTTP'].get('Sources', '').splitlines()
-                self.http_منبع = [s.strip() for s in منبع if s.strip() and ';' not in s]
+                src = cfg['HTTP'].get('Sources', '').splitlines()
+                self.http_sources = [s.strip() for s in src if s.strip() and ';' not in s]
             
             if 'SOCKS4' in cfg:
-                منبع = cfg['SOCKS4'].get('Sources', '').splitlines()
-                self.socks4_منبع = [s.strip() for s in منبع if s.strip() and ';' not in s]
+                src = cfg['SOCKS4'].get('Sources', '').splitlines()
+                self.socks4_sources = [s.strip() for s in src if s.strip() and ';' not in s]
             
             if 'SOCKS5' in cfg:
-                منبع = cfg['SOCKS5'].get('Sources', '').splitlines()
-                self.socks5_منبع = [s.strip() for s in منبع if s.strip() and ';' not in s]
+                src = cfg['SOCKS5'].get('Sources', '').splitlines()
+                self.socks5_sources = [s.strip() for s in src if s.strip() and ';' not in s]
             
-            print(f"{سبز}{وسط}  config.ini با موفقیت بارگذاری شد          {پایین}")
+            print(f"{G}{MD}  config.ini با موفقیت بارگذاری شد          {DN}")
             return True
             
         except:
-            print(f"{قرمز}{وسط}  config.ini خراب است!                      {پایین}")
+            print(f"{R}{MD}  config.ini خراب است!                      {DN}")
             return False
     
-    def جمع_آوری(self):
+    def collect_proxies(self):
         """جمع آوری پروکسی ها"""
-        self.خطاها = open('errors.txt', 'a+', encoding='utf-8')
+        self.error_file = open('errors.txt', 'a+', encoding='utf-8')
         
-        self.http.clear()
-        self.socks4.clear()
-        self.socks5.clear()
+        self.http_list.clear()
+        self.socks4_list.clear()
+        self.socks5_list.clear()
         
-        print(f"{فیروزه}{بالا}")
-        print(f"{وسط}  {پررنگ}در حال جمع آوری پروکسی...{پایان}                              {پایین}")
+        print(f"{C}{UP}")
+        print(f"{MD}  {Z}در حال جمع آوری پروکسی...{X}                              {DN}")
         
-        رشته‌ها = []
+        threads = []
         
-        if self.http_منبع:
-            t = threading.Thread(target=self.دریافت, args=(self.http_منبع, 'HTTP', self.http))
-            رشته‌ها.append(t)
+        if self.http_sources:
+            t = threading.Thread(target=self.fetch, args=(self.http_sources, 'HTTP', self.http_list))
+            threads.append(t)
             t.start()
         
-        if self.socks4_منبع:
-            t = threading.Thread(target=self.دریافت, args=(self.socks4_منبع, 'SOCKS4', self.socks4))
-            رشته‌ها.append(t)
+        if self.socks4_sources:
+            t = threading.Thread(target=self.fetch, args=(self.socks4_sources, 'SOCKS4', self.socks4_list))
+            threads.append(t)
             t.start()
         
-        if self.socks5_منبع:
-            t = threading.Thread(target=self.دریافت, args=(self.socks5_منبع, 'SOCKS5', self.socks5))
-            رشته‌ها.append(t)
+        if self.socks5_sources:
+            t = threading.Thread(target=self.fetch, args=(self.socks5_sources, 'SOCKS5', self.socks5_list))
+            threads.append(t)
             t.start()
         
-        for t in رشته‌ها:
+        for t in threads:
             t.join()
         
-        self.کل = len(self.http) + len(self.socks4) + len(self.socks5)
+        self.total = len(self.http_list) + len(self.socks4_list) + len(self.socks5_list)
         
-        print(f"{سبز}{وسط}  کل: {self.کل} | HTTP: {len(self.http)} | S4: {len(self.socks4)} | S5: {len(self.socks5)}  {پایین}")
-        print(f"{فیروزه}{پایین}")
+        print(f"{G}{MD}  کل: {self.total} | HTTP: {len(self.http_list)} | S4: {len(self.socks4_list)} | S5: {len(self.socks5_list)}  {DN}")
+        print(f"{C}{DN}")
     
-    def دریافت(self, منابع, نوع, لیست):
-        """دریافت پروکسی از یک منبع"""
-        for منبع in منابع:
+    def fetch(self, sources, ptype, plist):
+        """دریافت پروکسی از منابع"""
+        for src in sources:
             try:
-                ر = requests.get(منبع, timeout=زمان_تایم اوت)
-                if ر.status_code == 200:
-                    تعداد = 0
-                    for م in الگو.finditer(ر.text):
-                        لیست.append(م.group(1))
-                        تعداد += 1
-                    with self.قفل:
-                        print(f"{سبز}{وسط}  ✓ {نوع}: +{تعداد}                     {پایین}")
+                r = requests.get(src, timeout=TIMEOUT)
+                if r.status_code == 200:
+                    count = 0
+                    for m in PROXY_REGEX.finditer(r.text):
+                        plist.append(m.group(1))
+                        count += 1
+                    with self.lock:
+                        print(f"{G}{MD}  ✓ {ptype}: +{count}                     {DN}")
             except:
                 pass
     
-    def دریافت_توکن(self, پروکسی, نوع):
+    def get_token(self, proxy, ptype):
         """دریافت توکن"""
         try:
-            نشست = requests.Session()
-            پاسخ = نشست.get(
-                f'https://t.me/{self.کانال}/{self.شماره}',
+            session = requests.Session()
+            r = session.get(
+                f'https://t.me/{self.channel}/{self.post_id}',
                 params={'embed': '1', 'mode': 'tme'},
-                headers={'referer': f'https://t.me/{self.کانال}/{self.شماره}', 'user-agent': کاربر},
-                proxies={'http': f'{نوع}://{پروکسی}', 'https': f'{نوع}://{پروکسی}'},
-                timeout=زمان_تایم اوت)
+                headers={'referer': f'https://t.me/{self.channel}/{self.post_id}', 'user-agent': USER_AGENT},
+                proxies={'http': f'{ptype}://{proxy}', 'https': f'{ptype}://{proxy}'},
+                timeout=TIMEOUT)
             
-            توکن = re.search('data-view="([^"]+)', پاسخ.text)
-            return توکن.group(1) if توکن else None, نشست
+            token = re.search('data-view="([^"]+)', r.text)
+            return token.group(1) if token else None, session
         except:
             return None, None
     
-    def ارسال_ویو(self, توکن, نشست, پروکسی, نوع):
+    def send_view(self, token, session, proxy, ptype):
         """ارسال ویو"""
         try:
-            کوکی = نشست.cookies.get_dict()
-            پاسخ = نشست.get(
+            cookie = session.cookies.get_dict()
+            r = session.get(
                 'https://t.me/v/',
-                params={'views': str(توکن)},
+                params={'views': str(token)},
                 cookies={'stel_dt': '-240', 'stel_web_auth': 'https://web.telegram.org/z/'},
-                headers={'referer': f'https://t.me/{self.کانال}/{self.شماره}?embed=1&mode=tme', 'user-agent': کاربر},
-                proxies={'http': f'{نوع}://{پروکسی}', 'https': f'{نوع}://{پروکسی}'},
-                timeout=زمان_تایم اوت)
+                headers={'referer': f'https://t.me/{self.channel}/{self.post_id}?embed=1&mode=tme', 'user-agent': USER_AGENT},
+                proxies={'http': f'{ptype}://{proxy}', 'https': f'{ptype}://{proxy}'},
+                timeout=TIMEOUT)
             
-            return پاسخ.status_code == 200 and پاسخ.text == 'true'
+            return r.status_code == 200 and r.text == 'true'
         except:
             return False
     
-    def پردازش(self, پروکسی, نوع):
+    def process(self, proxy, ptype):
         """پردازش یک پروکسی"""
-        with self.قفل:
-            self.فعال += 1
+        with self.lock:
+            self.active += 1
         
-        توکن, نشست = self.دریافت_توکن(پروکسی, نوع)
+        token, session = self.get_token(proxy, ptype)
         
-        if توکن:
-            if self.ارسال_ویو(توکن, نشست, پروکسی, نوع):
-                with self.قفل:
-                    self.ارسال += 1
+        if token:
+            if self.send_view(token, session, proxy, ptype):
+                with self.lock:
+                    self.sent += 1
             else:
-                with self.قفل:
-                    self.ناموفق += 1
+                with self.lock:
+                    self.failed += 1
         else:
-            with self.قفل:
-                self.توکن_خراب += 1
+            with self.lock:
+                self.bad_token += 1
         
-        with self.قفل:
-            self.فعال -= 1
+        with self.lock:
+            self.active -= 1
     
-    def بررسی_ویو(self):
+    def check_views(self):
         """بررسی ویو فعلی"""
-        while self.درحال:
+        while self.running:
             try:
-                پاسخ = requests.get(
-                    f'https://t.me/{self.کانال}/{self.شماره}',
+                r = requests.get(
+                    f'https://t.me/{self.channel}/{self.post_id}',
                     params={'embed': '1', 'mode': 'tme'},
-                    headers={'referer': f'https://t.me/{self.کانال}/{self.شماره}', 'user-agent': کاربر},
-                    timeout=زمان_تایم اوت)
+                    headers={'referer': f'https://t.me/{self.channel}/{self.post_id}', 'user-agent': USER_AGENT},
+                    timeout=TIMEOUT)
                 
-                ویو = re.search('<span class="tgme_widget_message_views">([^<]+)', پاسخ.text)
-                if ویو:
-                    self.ویو_فعلی = ویو.group(1)
+                views = re.search('<span class="tgme_widget_message_views">([^<]+)', r.text)
+                if views:
+                    self.current_views = views.group(1)
                 time.sleep(2)
             except:
                 time.sleep(2)
     
-    def نمایش(self):
+    def display(self):
         """نمایش آمار"""
-        while self.درحال:
-            لوگو()
+        while self.running:
+            logo()
             
-            زمان = int(time.time() - self.شروع)
-            ساعت = زمان // 3600
-            دقیقه = (زمان % 3600) // 60
-            ثانیه = زمان % 60
+            elapsed = int(time.time() - self.start_time)
+            h = elapsed // 3600
+            m = (elapsed % 3600) // 60
+            s = elapsed % 60
             
-            print(f"{فیروزه}{بالا}")
-            print(f"{وسط}  {پررنگ}کانال:{پایان} {سبز}{self.کانال}{پایان}                       {پایین}")
-            print(f"{وسط}  {پررنگ}شماره:{پایان} {سبز}{self.شماره}{پایان}                       {پایین}")
-            print(f"{فیروزه}{خط}")
+            print(f"{C}{UP}")
+            print(f"{MD}  {Z}کانال:{X} {G}{self.channel}{X}                       {DN}")
+            print(f"{MD}  {Z}شماره:{X} {G}{self.post_id}{X}                       {DN}")
+            print(f"{C}{LN}")
             
-            print(f"{وسط}  {پررنگ}ویو فعلی:{پایان} {سبز}{self.ویو_فعلی}{پایان}                  {پایین}")
-            print(f"{وسط}  {پررنگ}ارسال شده:{پایان} {سبز}{self.ارسال}{پایان}                    {پایین}")
-            print(f"{وسط}  {پررنگ}ناموفق:{پایان} {قرمز}{self.ناموفق}{پایان}                      {پایین}")
-            print(f"{وسط}  {پررنگ}توکن خراب:{پایان} {قرمز}{self.توکن_خراب}{پایان}                {پایین}")
-            print(f"{وسط}  {پررنگ}خطاهای پروکسی:{پایان} {قرمز}{self.خطا}{پایان}                  {پایین}")
-            print(f"{فیروزه}{خط}")
+            print(f"{MD}  {Z}ویو فعلی:{X} {G}{self.current_views}{X}                  {DN}")
+            print(f"{MD}  {Z}ارسال شده:{X} {G}{self.sent}{X}                    {DN}")
+            print(f"{MD}  {Z}ناموفق:{X} {R}{self.failed}{X}                      {DN}")
+            print(f"{MD}  {Z}توکن خراب:{X} {R}{self.bad_token}{X}                {DN}")
+            print(f"{MD}  {Z}خطاهای پروکسی:{X} {R}{self.proxy_error}{X}          {DN}")
+            print(f"{C}{LN}")
             
-            print(f"{وسط}  {پررنگ}کل پروکسی:{پایان} {آبی}{self.کل}{پایان}                       {پایین}")
-            print(f"{وسط}  {پررنگ}فعال:{پایان} {سبز}{self.فعال}{پایان}                           {پایین}")
-            print(f"{وسط}  {پررنگ}HTTP:{پایان} {فیروزه}{len(self.http)}{پایان}                      {پایین}")
-            print(f"{وسط}  {پررنگ}SOCKS4:{پایان} {فیروزه}{len(self.socks4)}{پایان}                   {پایین}")
-            print(f"{وسط}  {پررنگ}SOCKS5:{پایان} {فیروزه}{len(self.socks5)}{پایان}                   {پایین}")
-            print(f"{فیروزه}{خط}")
+            print(f"{MD}  {Z}کل پروکسی:{X} {B}{self.total}{X}                       {DN}")
+            print(f"{MD}  {Z}فعال:{X} {G}{self.active}{X}                           {DN}")
+            print(f"{MD}  {Z}HTTP:{X} {C}{len(self.http_list)}{X}                      {DN}")
+            print(f"{MD}  {Z}SOCKS4:{X} {C}{len(self.socks4_list)}{X}                   {DN}")
+            print(f"{MD}  {Z}SOCKS5:{X} {C}{len(self.socks5_list)}{X}                   {DN}")
+            print(f"{C}{LN}")
             
-            print(f"{وسط}  {پررنگ}زمان:{پایان} {زرد}{ساعت:02d}:{دقیقه:02d}:{ثانیه:02d}{پایان}                       {پایین}")
-            print(f"{فیروزه}{پایین}")
-            print(f"{زرد}{وسط}  Ctrl+C برای توقف{پایان}                           {پایین}")
-            print(f"{فیروزه}{پایین}")
+            print(f"{MD}  {Z}زمان:{X} {Y}{h:02d}:{m:02d}:{s:02d}{X}                       {DN}")
+            print(f"{C}{DN}")
+            print(f"{Y}{MD}  Ctrl+C برای توقف{X}                           {DN}")
+            print(f"{C}{DN}")
             
             time.sleep(1)
     
-    def کارگر(self):
+    def worker(self):
         """کارگر اصلی"""
-        while self.درحال:
-            self.جمع_آوری()
+        while self.running:
+            self.collect_proxies()
             
-            if self.کل == 0:
+            if self.total == 0:
                 time.sleep(10)
                 continue
             
-            رشته‌ها = []
+            threads = []
             
-            for p in self.http[:50]:
-                t = threading.Thread(target=self.پردازش, args=(p, 'http'))
-                رشته‌ها.append(t)
-                while threading.active_count() > تعداد_رشته:
+            for p in self.http_list[:50]:
+                t = threading.Thread(target=self.process, args=(p, 'http'))
+                threads.append(t)
+                while threading.active_count() > MAX_THREADS:
                     time.sleep(0.1)
                 t.start()
             
             time.sleep(1)
             
-            for p in self.socks4[:50]:
-                t = threading.Thread(target=self.پردازش, args=(p, 'socks4'))
-                رشته‌ها.append(t)
-                while threading.active_count() > تعداد_رشته:
+            for p in self.socks4_list[:50]:
+                t = threading.Thread(target=self.process, args=(p, 'socks4'))
+                threads.append(t)
+                while threading.active_count() > MAX_THREADS:
                     time.sleep(0.1)
                 t.start()
             
             time.sleep(1)
             
-            for p in self.socks5[:50]:
-                t = threading.Thread(target=self.پردازش, args=(p, 'socks5'))
-                رشته‌ها.append(t)
-                while threading.active_count() > تعداد_رشته:
+            for p in self.socks5_list[:50]:
+                t = threading.Thread(target=self.process, args=(p, 'socks5'))
+                threads.append(t)
+                while threading.active_count() > MAX_THREADS:
                     time.sleep(0.1)
                 t.start()
             
-            for t in رشته‌ها:
+            for t in threads:
                 t.join()
     
-    def اجرا(self):
+    def run(self):
         """اجرای ربات"""
         try:
-            لوگو()
+            logo()
             
-            if not self.بارگذاری():
-                input(f"{زرد}{وسط}  اینتر را بزنید...{پایان}                     {پایین}")
+            if not self.load_config():
+                input(f"{Y}{MD}  اینتر را بزنید...{X}                     {DN}")
                 return
             
-            لینک = input(f"{سبز}{وسط}  لینک پست:{پایان} ")
+            link = input(f"{G}{MD}  لینک پست:{X} ")
             
             try:
-                لینک = لینک.replace('https://t.me/', '').replace('t.me/', '')
-                بخش = لینک.split('/')
-                if len(بخش) >= 2:
-                    self.کانال = بخش[0]
-                    self.شماره = بخش[1]
+                link = link.replace('https://t.me/', '').replace('t.me/', '')
+                parts = link.split('/')
+                if len(parts) >= 2:
+                    self.channel = parts[0]
+                    self.post_id = parts[1]
                 else:
                     raise
             except:
-                print(f"{قرمز}{وسط}  لینک اشتباه است!{پایان}                     {پایین}")
-                print(f"{زرد}{وسط}  مثال: channel/123{پایان}                    {پایین}")
-                input(f"{زرد}{وسط}  اینتر را بزنید...{پایان}                     {پایین}")
+                print(f"{R}{MD}  لینک اشتباه است!{X}                     {DN}")
+                print(f"{Y}{MD}  مثال: channel/123{X}                    {DN}")
+                input(f"{Y}{MD}  اینتر را بزنید...{X}                     {DN}")
                 return
             
-            print(f"{سبز}{وسط}  کانال: {self.کانال} | شماره: {self.شماره}{پایان}        {پایین}")
-            print(f"{زرد}{وسط}  شروع... Ctrl+C برای توقف{پایان}                  {پایین}")
+            print(f"{G}{MD}  کانال: {self.channel} | شماره: {self.post_id}{X}        {DN}")
+            print(f"{Y}{MD}  شروع... Ctrl+C برای توقف{X}                  {DN}")
             time.sleep(2)
             
-            threading.Thread(target=self.نمایش, daemon=True).start()
-            threading.Thread(target=self.بررسی_ویو, daemon=True).start()
-            threading.Thread(target=self.کارگر, daemon=True).join()
+            threading.Thread(target=self.display, daemon=True).start()
+            threading.Thread(target=self.check_views, daemon=True).start()
+            threading.Thread(target=self.worker, daemon=True).join()
             
         except KeyboardInterrupt:
-            self.درحال = False
-            print(f"\n{زرد}{وسط}  متوقف شد!{پایان}                           {پایین}")
-            print(f"{سبز}{وسط}  ارسال شده: {self.ارسال}{پایان}                    {پایین}")
+            self.running = False
+            print(f"\n{Y}{MD}  متوقف شد!{X}                           {DN}")
+            print(f"{G}{MD}  ارسال شده: {self.sent}{X}                    {DN}")
 
 if __name__ == '__main__':
-    ربات = جویا()
-    ربات.اجرا()
+    bot = JoyaView()
+    bot.run()
