@@ -1,5 +1,5 @@
 """
-TELEGRAM VIEW BOT - FINAL VERSION WITH YOUR CONFIG
+TELEGRAM VIEW BOT - DEBUG VERSION
 """
 
 import os
@@ -30,20 +30,17 @@ from colorama import init, Fore, Style
 init(autoreset=True)
 
 # ==================== تنظیمات ====================
-THREADS = 300
+THREADS = 100  # کمتر برای شروع
 PROXIES_TYPES = ('http', 'socks4', 'socks5')
-time_out = 15
-max_proxies_per_type = 3000
+time_out = 20  # بیشتر
+max_proxies_per_type = 2000
 
 # ==================== User-Agent ====================
 try:
     ua = UserAgent()
     def get_ua(): return ua.random
 except:
-    USER_AGENTS = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
-    ]
+    USER_AGENTS = ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36']
     def get_ua(): return random.choice(USER_AGENTS)
 
 # ==================== Regex ====================
@@ -55,14 +52,10 @@ REGEX = compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
                 + r"|65[0-4]\d{2}|655[0-2]\d|6553[0-5])")
                 + r")(?:\D|$)")
 
-# ==================== فایل خطا ====================
 errors = open('errors.txt', 'a+', encoding='utf-8')
 
-# ==================== بارگذاری YOUR config.ini ====================
-print(Fore.CYAN + "╔════════════════════════════════════════════════════╗")
-print(Fore.CYAN + "║     LOADING YOUR PROXY SOURCES...                ║")
-print(Fore.CYAN + "╚════════════════════════════════════════════════════╝")
-
+# ==================== بارگذاری config.ini ====================
+print(Fore.CYAN + "\n📂 Loading config.ini...")
 cfg = ConfigParser()
 cfg.read("config.ini", encoding="utf-8")
 
@@ -71,25 +64,12 @@ try:
     socks4 = cfg["SOCKS4"]
     socks5 = cfg["SOCKS5"]
     
-    # نمایش منابع شما
     http_sources = [s.strip() for s in http.get("Sources").split('\n') if s.strip()]
     socks4_sources = [s.strip() for s in socks4.get("Sources").split('\n') if s.strip()]
     socks5_sources = [s.strip() for s in socks5.get("Sources").split('\n') if s.strip()]
     
-    print(Fore.GREEN + f"\n✅ HTTP sources: {len(http_sources)}")
-    for s in http_sources[:3]:
-        print(Fore.CYAN + f"   📍 {s[:50]}...")
-    
-    print(Fore.GREEN + f"\n✅ SOCKS4 sources: {len(socks4_sources)}")
-    for s in socks4_sources[:3]:
-        print(Fore.CYAN + f"   📍 {s[:50]}...")
-    
-    print(Fore.GREEN + f"\n✅ SOCKS5 sources: {len(socks5_sources)}")
-    for s in socks5_sources[:3]:
-        print(Fore.CYAN + f"   📍 {s[:50]}...")
-    
 except Exception as e:
-    print(Fore.RED + f"❌ Error reading config.ini: {e}")
+    print(Fore.RED + f"❌ Error: {e}")
     exit()
 
 # ==================== متغیرها ====================
@@ -103,13 +83,11 @@ successful_views = 0
 channel = ''
 post = 0
 real_views = '0'
-working_proxies = []
 start_time = datetime.now()
 
 # ==================== جمع‌آوری پروکسی ====================
 
 def collect_from_url(url, proxy_type):
-    """جمع‌آوری از یک URL"""
     try:
         headers = {'User-Agent': get_ua()}
         r = requests.get(url, timeout=10, headers=headers)
@@ -129,35 +107,29 @@ def collect_from_url(url, proxy_type):
                         count += 1
             print(Fore.GREEN + f"   ✅ +{count} from {url.split('/')[-1][:20]}")
     except Exception as e:
-        errors.write(f'{datetime.now()} - Collect error {url}: {e}\n')
+        errors.write(f'{datetime.now()} - {url}: {e}\n')
 
 def collect_all():
-    """جمع‌آوری از همه منابع"""
-    print(Fore.YELLOW + "\n📡 Collecting proxies from your sources...")
-    
+    print(Fore.YELLOW + "\n📡 Collecting proxies...")
     threads = []
     
-    # HTTP
     for url in http_sources:
         t = Thread(target=collect_from_url, args=(url, 'http'))
         threads.append(t)
         t.start()
     
-    # SOCKS4
     for url in socks4_sources:
         t = Thread(target=collect_from_url, args=(url, 'socks4'))
         threads.append(t)
         t.start()
     
-    # SOCKS5
     for url in socks5_sources:
         t = Thread(target=collect_from_url, args=(url, 'socks5'))
         threads.append(t)
         t.start()
     
-    # Wait
     for t in threads:
-        t.join(timeout=20)
+        t.join(timeout=15)
     
     # Remove duplicates
     http_proxies[:] = list(set(http_proxies))
@@ -165,49 +137,58 @@ def collect_all():
     socks5_proxies[:] = list(set(socks5_proxies))
     
     print(Fore.CYAN + "\n" + "="*50)
-    print(Fore.GREEN + f"📊 TOTAL PROXIES COLLECTED:")
+    print(Fore.GREEN + f"📊 TOTAL PROXIES:")
     print(Fore.GREEN + f"   HTTP  : {len(http_proxies):,}")
     print(Fore.GREEN + f"   SOCKS4: {len(socks4_proxies):,}")
     print(Fore.GREEN + f"   SOCKS5: {len(socks5_proxies):,}")
     print(Fore.CYAN + "="*50)
 
-# ==================== تست سریع پروکسی ====================
+# ==================== تست پروکسی (با دیباگ) ====================
 
-def test_proxy(proxy, proxy_type):
-    """تست یک پروکسی"""
+def test_proxy(proxy, proxy_type, index, total):
+    """تست با نمایش پیشرفت"""
     try:
         test_url = "http://httpbin.org/ip"
         proxies = {
             'http': f'{proxy_type}://{proxy}',
             'https': f'{proxy_type}://{proxy}'
         }
+        start = time.time()
         r = requests.get(test_url, proxies=proxies, timeout=5)
-        return r.status_code == 200
-    except:
+        elapsed = time.time() - start
+        
+        if r.status_code == 200:
+            print(Fore.GREEN + f"   ✅ [{index}/{total}] {proxy_type}://{proxy} - {elapsed:.1f}s")
+            return True
+        else:
+            print(Fore.RED + f"   ❌ [{index}/{total}] {proxy_type}://{proxy} - {r.status_code}")
+            return False
+    except Exception as e:
+        print(Fore.RED + f"   ❌ [{index}/{total}] {proxy_type}://{proxy} - {str(e)[:30]}")
         return False
 
 def filter_proxies():
-    """فقط پروکسی‌های کارآمد"""
+    """فیلتر با نمایش پیشرفت"""
     global http_proxies, socks4_proxies, socks5_proxies
     
-    print(Fore.YELLOW + "\n🔍 Testing proxies (30 seconds)...")
+    print(Fore.YELLOW + "\n🔍 Testing proxies (this may take a few minutes)...")
     
-    # HTTP
     working_http = []
-    for proxy in http_proxies[:300]:
-        if test_proxy(proxy, 'http'):
+    total_http = len(http_proxies)
+    for i, proxy in enumerate(http_proxies[:200]):  # فقط 200 تا برای شروع
+        if test_proxy(proxy, 'http', i+1, total_http):
             working_http.append(proxy)
     
-    # SOCKS4
     working_socks4 = []
-    for proxy in socks4_proxies[:300]:
-        if test_proxy(proxy, 'socks4'):
+    total_socks4 = len(socks4_proxies)
+    for i, proxy in enumerate(socks4_proxies[:200]):
+        if test_proxy(proxy, 'socks4', i+1, total_socks4):
             working_socks4.append(proxy)
     
-    # SOCKS5
     working_socks5 = []
-    for proxy in socks5_proxies[:300]:
-        if test_proxy(proxy, 'socks5'):
+    total_socks5 = len(socks5_proxies)
+    for i, proxy in enumerate(socks5_proxies[:200]):
+        if test_proxy(proxy, 'socks5', i+1, total_socks5):
             working_socks5.append(proxy)
     
     http_proxies = working_http
@@ -215,13 +196,12 @@ def filter_proxies():
     socks5_proxies = working_socks5
     
     total = len(http_proxies) + len(socks4_proxies) + len(socks5_proxies)
-    print(Fore.GREEN + f"✅ Working proxies: {total}")
+    print(Fore.GREEN + f"\n✅ Working proxies: {total}")
     return total > 0
 
 # ==================== ویو زدن ====================
 
 def send_view(proxy, proxy_type):
-    """ارسال ویو"""
     global total_views, successful_views, proxy_errors, token_errors
     
     try:
@@ -279,10 +259,8 @@ def send_view(proxy, proxy_type):
         return False
 
 def worker():
-    """کارگر"""
     while True:
         try:
-            # جمع کردن همه پروکسی‌ها
             all_proxies = []
             for p in http_proxies:
                 all_proxies.append(('http', p))
@@ -292,20 +270,19 @@ def worker():
                 all_proxies.append(('socks5', p))
             
             if not all_proxies:
-                sleep(0.5)
+                sleep(1)
                 continue
             
             proxy_type, proxy = random.choice(all_proxies)
             send_view(proxy, proxy_type)
-            sleep(0.02)
+            sleep(0.05)
             
         except:
             sleep(0.1)
 
-# ==================== آمار ====================
+# ==================== آمار ساده ====================
 
 def show_stats():
-    """نمایش آمار"""
     while True:
         system('cls' if name == 'nt' else 'clear')
         
@@ -316,30 +293,26 @@ def show_stats():
         speed = successful_views / (elapsed.total_seconds() + 0.1)
         total_proxies = len(http_proxies) + len(socks4_proxies) + len(socks5_proxies)
         
-        print(Fore.CYAN + "╔" + "═" * 60 + "╗")
-        print(Fore.CYAN + "║" + Fore.YELLOW + " " * 18 + "🔥 TELEGRAM VIEW BOT 🔥" + " " * 18 + Fore.CYAN + "║")
-        print(Fore.CYAN + "╠" + "═" * 60 + "╣")
-        print(Fore.CYAN + "║ " + Fore.WHITE + "TARGET".ljust(12) + ":" + Fore.GREEN + f" {channel}/{post}".ljust(42) + Fore.CYAN + "║")
-        print(Fore.CYAN + "║ " + Fore.WHITE + "CURRENT".ljust(12) + ":" + Fore.GREEN + f" {real_views}".ljust(42) + Fore.CYAN + "║")
-        print(Fore.CYAN + "╠" + "═" * 60 + "╣")
-        print(Fore.CYAN + "║ " + Fore.GREEN + "✅ SUCCESS".ljust(20) + f": {successful_views:>8,}" + " " * 26 + Fore.CYAN + "║")
-        print(Fore.CYAN + "║ " + Fore.YELLOW + "📦 TOTAL".ljust(20) + f": {total_views:>8,}" + " " * 26 + Fore.CYAN + "║")
-        print(Fore.CYAN + "║ " + Fore.RED + "❌ PROXY ERR".ljust(20) + f": {proxy_errors:>8,}" + " " * 26 + Fore.CYAN + "║")
-        print(Fore.CYAN + "║ " + Fore.RED + "⚠️ TOKEN ERR".ljust(20) + f": {token_errors:>8,}" + " " * 26 + Fore.CYAN + "║")
-        print(Fore.CYAN + "╠" + "═" * 60 + "╣")
-        print(Fore.CYAN + "║ " + Fore.MAGENTA + "⚡ SPEED".ljust(20) + f": {speed:.2f}/s".ljust(34) + Fore.CYAN + "║")
-        print(Fore.CYAN + "║ " + Fore.WHITE + "⏱️ TIME".ljust(20) + f": {minutes:02d}:{seconds:02d}".ljust(34) + Fore.CYAN + "║")
-        print(Fore.CYAN + "╠" + "═" * 60 + "╣")
-        print(Fore.CYAN + "║ " + Fore.CYAN + "📊 PROXIES".ljust(60) + "║")
-        print(Fore.CYAN + "║ " + Fore.WHITE + f"HTTP: {len(http_proxies):>4} | SOCKS4: {len(socks4_proxies):>4} | SOCKS5: {len(socks5_proxies):>4} | TOTAL: {total_proxies:>4}".ljust(58) + Fore.CYAN + "║")
-        print(Fore.CYAN + "╠" + "═" * 60 + "╣")
-        print(Fore.CYAN + "║ " + Fore.WHITE + f"THREADS: {active_count():>3}/{THREADS}".ljust(58) + Fore.CYAN + "║")
-        print(Fore.CYAN + "╚" + "═" * 60 + "╝")
+        print(Fore.CYAN + "="*60)
+        print(Fore.YELLOW + "           TELEGRAM VIEW BOT")
+        print(Fore.CYAN + "="*60)
+        print(Fore.WHITE + f"Target: {channel}/{post}")
+        print(Fore.WHITE + f"Current Views: {real_views}")
+        print(Fore.CYAN + "-"*60)
+        print(Fore.GREEN + f"✅ Success: {successful_views}")
+        print(Fore.YELLOW + f"📦 Total: {total_views}")
+        print(Fore.RED + f"❌ Errors: {proxy_errors + token_errors}")
+        print(Fore.CYAN + "-"*60)
+        print(Fore.MAGENTA + f"⚡ Speed: {speed:.1f}/s")
+        print(Fore.WHITE + f"⏱️ Time: {minutes:02d}:{seconds:02d}")
+        print(Fore.CYAN + "-"*60)
+        print(Fore.CYAN + f"Proxies: HTTP:{len(http_proxies)} SOCKS4:{len(socks4_proxies)} SOCKS5:{len(socks5_proxies)}")
+        print(Fore.WHITE + f"Threads: {active_count()}/{THREADS}")
+        print(Fore.CYAN + "="*60)
         
         sleep(2)
 
 def check_views():
-    """چک ویو"""
     global real_views
     while True:
         try:
@@ -364,33 +337,29 @@ def main():
     system('cls' if name == 'nt' else 'clear')
     
     print(Fore.CYAN + """
-╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║     🔥 TELEGRAM VIEW BOT - POWERED BY YOUR CONFIG 🔥       ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝
+╔════════════════════════════════════════════════════╗
+║     TELEGRAM VIEW BOT - DEBUG MODE                ║
+╚════════════════════════════════════════════════════╝
 """)
     
-    url = input(Fore.YELLOW + "📌 Enter Telegram URL: " + Fore.WHITE).strip()
+    url = input(Fore.YELLOW + "URL: " + Fore.WHITE).strip()
     
     try:
         channel, post = url.replace('https://t.me/', '').split('/')
         post = int(post)
     except:
-        print(Fore.RED + "❌ Invalid URL! Use: https://t.me/username/123")
+        print(Fore.RED + "❌ Invalid URL!")
         return
     
     print(Fore.GREEN + f"\n✅ Target: {channel}/{post}")
     
-    # جمع‌آوری
     collect_all()
     
-    # فیلتر
     if not filter_proxies():
         print(Fore.RED + "\n❌ No working proxies!")
+        print(Fore.YELLOW + "Try increasing time_out or use different sources")
         return
     
-    # شروع
     print(Fore.GREEN + "\n🚀 Starting workers...")
     for i in range(THREADS):
         Thread(target=worker, daemon=True).start()
@@ -403,5 +372,4 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print(Fore.RED + "\n\n⚠️ Stopped")
-        print(Fore.GREEN + f"✅ Final Views: {successful_views}")
         errors.close()
