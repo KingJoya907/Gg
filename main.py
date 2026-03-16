@@ -168,10 +168,9 @@ def start_fast_scrap():
         t.join(timeout=20)  # حداکثر 20 ثانیه صبر کن
     
     # حذف تکراری‌ها
-    global http_proxies, socks4_proxies, socks5_proxies
-    http_proxies = list(set(http_proxies))[:max_proxies_per_type]
-    socks4_proxies = list(set(socks4_proxies))[:max_proxies_per_type]
-    socks5_proxies = list(set(socks5_proxies))[:max_proxies_per_type]
+    http_proxies[:] = list(set(http_proxies))[:max_proxies_per_type]
+    socks4_proxies[:] = list(set(socks4_proxies))[:max_proxies_per_type]
+    socks5_proxies[:] = list(set(socks5_proxies))[:max_proxies_per_type]
 
 def validate_proxy_quick(proxy, proxy_type):
     """اعتبارسنجی سریع پروکسی"""
