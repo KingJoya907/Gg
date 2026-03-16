@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 """
-Telegram View Bot 2026 - Termux Optimized
-Anti-block, High Performance, Socks5 Support
+Telegram View Bot 2026 - Final Termux Edition
+Fully Optimized with config.ini Support
 """
 
 import os
@@ -13,18 +13,17 @@ import time
 import json
 import random
 import threading
-import socket
 from datetime import datetime
 from collections import deque
-from urllib.parse import urlparse
+from configparser import ConfigParser
 
-# Auto install dependencies for Termux
+# Auto install dependencies
 def install_dependencies():
     required = {
         'requests': 'requests',
         'socks': 'pysocks',
-        'fake_headers': 'fake-headers',
-        'cloudscraper': 'cloudscraper'
+        'cloudscraper': 'cloudscraper',
+        'fake_headers': 'fake-headers'
     }
     
     for module, package in required.items():
@@ -37,68 +36,125 @@ def install_dependencies():
 install_dependencies()
 
 import requests
-import socks
 import cloudscraper
 from fake_headers import Headers
 
-# ==================== Main Configuration ====================
+# ==================== Configuration ====================
 class Config:
     # General settings
-    MAX_THREADS = 300  # Lower for Termux
-    REQUEST_TIMEOUT = 10
-    RETRY_COUNT = 2
+    MAX_THREADS = 250
+    REQUEST_TIMEOUT = 15
+    RETRY_COUNT = 3
     REQUEST_DELAY = 0.3
-    
-    # Proxy settings
-    PROXY_TIMEOUT = 5
+    PROXY_TIMEOUT = 8
     PROXY_TEST_URL = 'http://httpbin.org/ip'
-    MAX_PROXY_AGE = 300  # seconds
     
-    # New 2026 User Agents
+    # User Agents 2026
     USER_AGENTS = [
         'Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
         'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1'
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+        'Mozilla/5.0 (iPad; CPU OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0'
     ]
-    
-    # New 2026 Proxy APIs
-    PROXY_SOURCES = {
-        'http': [
-            'https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=5000&country=all',
-            'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt',
-            'https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/http.txt',
-            'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt'
-        ],
-        'socks4': [
-            'https://api.proxyscrape.com/v2/?request=getproxies&protocol=socks4&timeout=5000&country=all',
-            'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks4.txt',
-            'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks4.txt'
-        ],
-        'socks5': [
-            'https://api.proxyscrape.com/v2/?request=getproxies&protocol=socks5&timeout=5000&country=all',
-            'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt',
-            'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt',
-            'https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt'
-        ]
-    }
 
-# ==================== Proxy Manager Class ====================
+# ==================== Config Manager ====================
+class ConfigManager:
+    def __init__(self, config_file='config.ini'):
+        self.config_file = config_file
+        self.config = ConfigParser(interpolation=None)
+        self.proxy_sources = {
+            'http': [],
+            'socks4': [],
+            'socks5': []
+        }
+        self.load_config()
+        
+    def load_config(self):
+        """Load configuration from config.ini"""
+        if not os.path.exists(self.config_file):
+            self.create_default_config()
+            
+        self.config.read(self.config_file, encoding='utf-8')
+        
+        # Load proxy sources
+        for proxy_type in ['HTTP', 'SOCKS4', 'SOCKS5']:
+            if proxy_type in self.config:
+                sources = self.config[proxy_type].get('Sources', '').splitlines()
+                # Clean and filter empty lines
+                sources = [s.strip() for s in sources if s.strip() and not s.strip().startswith(';')]
+                self.proxy_sources[proxy_type.lower()] = sources
+                
+        print(f"✅ Loaded {sum(len(v) for v in self.proxy_sources.values())} proxy sources")
+        
+    def create_default_config(self):
+        """Create default config.ini file"""
+        default_config = '''[HTTP]
+Sources =
+    https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/http/data.txt
+    https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt
+    https://raw.githubusercontent.com/komutan234/Proxy-List-Free/main/proxies/http.txt
+    https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt
+    https://raw.githubusercontent.com/vakhov/fresh-proxy-list/master/http.txt
+    https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=10000&country=all
+    https://raw.githubusercontent.com/mmpx12/proxy-list/master/http.txt
+    https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt
+    https://openproxylist.xyz/http.txt
+    https://proxyspace.pro/http.txt
+
+[SOCKS4]
+Sources =
+    https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/socks4/data.txt
+    https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/socks4/data.txt
+    https://raw.githubusercontent.com/komutan234/Proxy-List-Free/main/proxies/socks4.txt
+    https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks4.txt
+    https://raw.githubusercontent.com/vakhov/fresh-proxy-list/master/socks4.txt
+    https://api.proxyscrape.com/v2/?request=getproxies&protocol=socks4&timeout=10000&country=all
+    https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks4.txt
+    https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks4.txt
+    https://openproxylist.xyz/socks4.txt
+
+[SOCKS5]
+Sources =
+    https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/socks5/data.txt
+    https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/socks5/data.txt
+    https://raw.githubusercontent.com/komutan234/Proxy-List-Free/main/proxies/socks5.txt
+    https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt
+    https://raw.githubusercontent.com/vakhov/fresh-proxy-list/master/socks5.txt
+    https://api.proxyscrape.com/v2/?request=getproxies&protocol=socks5&timeout=10000&country=all
+    https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks5.txt
+    https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks5.txt
+    https://openproxylist.xyz/socks5.txt
+    https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt
+'''
+        with open(self.config_file, 'w', encoding='utf-8') as f:
+            f.write(default_config)
+        print("✅ Created default config.ini")
+
+# ==================== Proxy Manager ====================
 class ProxyManager:
-    def __init__(self):
+    def __init__(self, config_manager):
+        self.config = config_manager
         self.proxies = {
-            'http': deque(maxlen=1000),
-            'socks4': deque(maxlen=1000),
-            'socks5': deque(maxlen=1000)
+            'http': deque(maxlen=2000),
+            'socks4': deque(maxlen=2000),
+            'socks5': deque(maxlen=2000)
         }
         self.bad_proxies = set()
         self.lock = threading.Lock()
         self.last_update = 0
+        self.stats = {'total': 0, 'working': 0}
         
     def fetch_proxies(self, proxy_type):
-        """Fetch proxies from different sources"""
-        proxies = []
-        sources = Config.PROXY_SOURCES.get(proxy_type, [])
+        """Fetch proxies from sources"""
+        all_proxies = []
+        sources = self.config.proxy_sources.get(proxy_type, [])
+        
+        if not sources:
+            return []
+            
+        print(f"\n📡 Fetching {proxy_type} proxies...")
         
         for url in sources:
             try:
@@ -106,25 +162,35 @@ class ProxyManager:
                 response = scraper.get(url, timeout=Config.PROXY_TIMEOUT)
                 
                 if response.status_code == 200:
-                    # Extract proxies with regex
+                    # Extract proxies
                     found = re.findall(r'\d+\.\d+\.\d+\.\d+:\d+', response.text)
                     
-                    # Quick proxy testing
-                    for proxy in found[:50]:  # Limit for speed
-                        if self.test_proxy(proxy, proxy_type):
-                            proxies.append(proxy)
-                            
-                    print(f"📡 {len(found)} {proxy_type} proxies fetched from {url}")
-                    
+                    if found:
+                        all_proxies.extend(found)
+                        print(f"   → {len(found)} from {url.split('/')[2]}")
+                        
             except Exception as e:
                 continue
                 
-            time.sleep(1)
+            time.sleep(0.5)
             
-        return list(set(proxies))  # Remove duplicates
+        # Remove duplicates
+        all_proxies = list(set(all_proxies))
+        
+        # Quick test
+        working = []
+        test_sample = all_proxies[:100]  # Test first 100
+        
+        for proxy in test_sample:
+            if self.test_proxy(proxy, proxy_type):
+                working.append(proxy)
+                
+        print(f"   ✅ {len(working)} working {proxy_type} proxies found")
+        
+        return working
         
     def test_proxy(self, proxy, proxy_type):
-        """Test proxy health"""
+        """Test if proxy is working"""
         try:
             if proxy_type == 'http':
                 test_proxies = {
@@ -138,7 +204,7 @@ class ProxyManager:
                 }
                 
             response = requests.get(
-                'http://httpbin.org/ip',
+                Config.PROXY_TEST_URL,
                 proxies=test_proxies,
                 timeout=Config.PROXY_TIMEOUT
             )
@@ -148,62 +214,74 @@ class ProxyManager:
         except:
             return False
             
-    def update_proxies(self):
-        """Update proxy list"""
-        if time.time() - self.last_update < 60:  # Update every 1 minute
+    def update_all(self):
+        """Update all proxy types"""
+        if time.time() - self.last_update < 120:  # Update every 2 minutes
             return
             
-        print("\n🔄 Fetching new proxies...")
+        print("\n" + "="*60)
+        print("🔄 Updating proxies...")
         
         threads = []
+        results = {}
+        
+        def update_type(proxy_type):
+            working = self.fetch_proxies(proxy_type)
+            with self.lock:
+                for proxy in working:
+                    if proxy not in self.bad_proxies:
+                        self.proxies[proxy_type].append(proxy)
+                results[proxy_type] = len(working)
+                
         for proxy_type in ['http', 'socks4', 'socks5']:
-            thread = threading.Thread(
-                target=self._update_type,
-                args=(proxy_type,)
-            )
+            thread = threading.Thread(target=update_type, args=(proxy_type,))
             threads.append(thread)
             thread.start()
-            time.sleep(0.5)
+            time.sleep(0.2)
             
         for thread in threads:
             thread.join()
             
         self.last_update = time.time()
         
-        # Show statistics
+        # Update stats
         total = sum(len(p) for p in self.proxies.values())
-        print(f"\n✅ {total} working proxies ready")
+        self.stats['total'] = total
+        print(f"\n✅ Total working proxies: {total}")
         
-    def _update_type(self, proxy_type):
-        """Update specific proxy type"""
-        new_proxies = self.fetch_proxies(proxy_type)
+    def get_proxy(self, preferred_type=None):
+        """Get a proxy from the pool"""
+        if preferred_type and self.proxies[preferred_type]:
+            with self.lock:
+                proxy = self.proxies[preferred_type].popleft()
+                self.proxies[preferred_type].append(proxy)
+                return proxy, preferred_type
+                
+        # Try random type
+        types = ['http', 'socks5', 'socks4']
+        random.shuffle(types)
         
-        with self.lock:
-            for proxy in new_proxies:
-                if proxy not in self.bad_proxies:
-                    self.proxies[proxy_type].append(proxy)
-                    
-    def get_proxy(self, proxy_type='http'):
-        """Get a proxy from the list"""
-        with self.lock:
+        for proxy_type in types:
             if self.proxies[proxy_type]:
-                proxy = self.proxies[proxy_type].popleft()
-                self.proxies[proxy_type].append(proxy)  # Return to end of queue
-                return proxy
-        return None
+                with self.lock:
+                    proxy = self.proxies[proxy_type].popleft()
+                    self.proxies[proxy_type].append(proxy)
+                    return proxy, proxy_type
+                    
+        return None, None
         
     def mark_bad(self, proxy, proxy_type):
         """Mark proxy as bad"""
         with self.lock:
             self.bad_proxies.add(proxy)
-            # Remove from main list
             if proxy in self.proxies[proxy_type]:
                 self.proxies[proxy_type].remove(proxy)
 
 # ==================== Main Bot Class ====================
 class TelegramViewBot:
     def __init__(self):
-        self.proxy_manager = ProxyManager()
+        self.config_manager = ConfigManager()
+        self.proxy_manager = ProxyManager(self.config_manager)
         self.stats = {
             'sent': 0,
             'failed': 0,
@@ -215,20 +293,15 @@ class TelegramViewBot:
         self.post = ''
         self.lock = threading.Lock()
         
-        # Storage structure
+        # Create logs directory
         os.makedirs('logs', exist_ok=True)
         
-    def log(self, msg, level='info'):
-        """Log with timestamp"""
-        timestamp = datetime.now().strftime('%H:%M:%S')
-        print(f"[{timestamp}] {msg}")
-        
     def get_token(self, proxy, proxy_type):
-        """Get view token with 2026 method"""
+        """Get view token with multiple methods"""
         headers = {
             'User-Agent': random.choice(Config.USER_AGENTS),
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Language': 'en-US,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
             'DNT': '1',
             'Connection': 'keep-alive',
@@ -236,6 +309,7 @@ class TelegramViewBot:
         }
         
         try:
+            # Setup proxies
             if proxy_type == 'http':
                 proxies = {
                     'http': f'http://{proxy}',
@@ -249,12 +323,12 @@ class TelegramViewBot:
                 
             session = requests.Session()
             
-            # Step 1: Get main page
+            # Get main page
             url = f'https://t.me/{self.channel}/{self.post}'
             params = {
                 'embed': '1',
                 'mode': 'tme',
-                'v': str(int(time.time()))  # Cache buster
+                'v': str(int(time.time()))
             }
             
             response = session.get(
@@ -265,40 +339,32 @@ class TelegramViewBot:
                 timeout=Config.REQUEST_TIMEOUT
             )
             
-            # Extract token using different methods
-            token = None
+            # Try different token patterns
+            token_patterns = [
+                r'data-view="([^"]+)"',
+                r'data-view-id="([^"]+)"',
+                r'data-counter="([^"]+)"',
+                r'"viewId":"([^"]+)"',
+                r'data-view-key="([^"]+)"',
+                r'data-view-token="([^"]+)"'
+            ]
             
-            # Method 1: data-view
-            match = re.search(r'data-view="([^"]+)"', response.text)
-            if match:
-                token = match.group(1)
-                
-            # Method 2: data-view-id
-            if not token:
-                match = re.search(r'data-view-id="([^"]+)"', response.text)
+            for pattern in token_patterns:
+                match = re.search(pattern, response.text)
                 if match:
-                    token = match.group(1)
+                    return match.group(1), session, proxies
                     
-            # Method 3: views counter
-            if not token:
-                match = re.search(r'data-counter="([^"]+)"', response.text)
-                if match:
-                    token = match.group(1)
-                    
-            if token:
-                return token, session, proxies
-                
         except Exception as e:
             pass
             
         return None, None, None
         
     def send_view(self, token, session, proxies):
-        """Send view with new method"""
+        """Send the view"""
         headers = {
             'User-Agent': random.choice(Config.USER_AGENTS),
             'Accept': '*/*',
-            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Language': 'en-US,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
             'X-Requested-With': 'XMLHttpRequest',
             'Connection': 'keep-alive',
@@ -317,7 +383,8 @@ class TelegramViewBot:
             
             # Check response
             if response.status_code == 200:
-                if response.text.strip() in ['true', 'ok', '1']:
+                text = response.text.strip().lower()
+                if text in ['true', 'ok', '1', '"true"', '"ok"']:
                     return True
                     
         except:
@@ -325,16 +392,17 @@ class TelegramViewBot:
             
         return False
         
-    def worker(self, proxy_type='http'):
-        """Main worker for sending views"""
+    def worker(self):
+        """Main worker thread"""
         while self.running:
-            proxy = self.proxy_manager.get_proxy(proxy_type)
+            # Get a proxy
+            proxy, proxy_type = self.proxy_manager.get_proxy()
             
             if not proxy:
-                time.sleep(2)
+                time.sleep(1)
                 continue
                 
-            # Get token
+            # Try to send view
             token, session, proxies = self.get_token(proxy, proxy_type)
             
             if not token:
@@ -343,7 +411,6 @@ class TelegramViewBot:
                     self.proxy_manager.mark_bad(proxy, proxy_type)
                 continue
                 
-            # Send view
             success = self.send_view(token, session, proxies)
             
             with self.lock:
@@ -356,7 +423,7 @@ class TelegramViewBot:
             time.sleep(Config.REQUEST_DELAY)
             
     def monitor_views(self):
-        """Monitor view count"""
+        """Monitor real view count"""
         scraper = cloudscraper.create_scraper()
         
         while self.running:
@@ -366,75 +433,79 @@ class TelegramViewBot:
                 
                 response = scraper.get(url, headers=headers, timeout=10)
                 
-                # Extract view count
-                patterns = [
+                # Try different view patterns
+                view_patterns = [
                     r'<span class="tgme_widget_message_views">([^<]+)',
                     r'data-view-counter="([^"]+)"',
-                    r'"views":(\d+)'
+                    r'"views":(\d+)',
+                    r'<span class="views">([^<]+)',
+                    r'data-post-views="([^"]+)"'
                 ]
                 
-                for pattern in patterns:
+                for pattern in view_patterns:
                     match = re.search(pattern, response.text)
                     if match:
-                        views = match.group(1).strip()
-                        # Remove commas and extra characters
-                        views = re.sub(r'[^\d]', '', views)
-                        if views:
-                            self.stats['total_views'] = int(views)
+                        views = re.sub(r'[^\d]', '', match.group(1))
+                        if views and views.isdigit():
+                            with self.lock:
+                                self.stats['total_views'] = int(views)
                             break
                             
-            except:
+            except Exception as e:
                 pass
                 
-            time.sleep(5)
+            time.sleep(3)
             
     def show_status(self):
-        """Show status display"""
+        """Display status"""
         while self.running:
+            os.system('clear')
+            
             elapsed = int(time.time() - self.stats['start_time'])
             hours = elapsed // 3600
             minutes = (elapsed % 3600) // 60
             seconds = elapsed % 60
             
-            # Calculate speed
-            if elapsed > 0:
-                speed = self.stats['sent'] / elapsed
-            else:
-                speed = 0
-                
-            # Clear screen and show stats
-            os.system('clear')
+            speed = self.stats['sent'] / elapsed if elapsed > 0 else 0
             
             print("="*60)
-            print("🤖 Telegram View Bot 2026 - Termux Edition")
+            print("🤖 Telegram View Bot 2026 - Final Termux Edition")
             print("="*60)
             print(f"📌 Channel: {self.channel}")
             print(f"📌 Post: {self.post}")
             print("-"*60)
-            print(f"✅ Views Sent: {self.stats['sent']}")
-            print(f"❌ Failed Views: {self.stats['failed']}")
-            print(f"👁️ Current Views: {self.stats['total_views']:,}")
+            print(f"✅ Views Sent: {self.stats['sent']:,}")
+            print(f"❌ Failed: {self.stats['failed']:,}")
+            print(f"👁️ Real Views: {self.stats['total_views']:,}")
             print(f"⚡ Speed: {speed:.1f} views/sec")
             print(f"⏱️ Runtime: {hours:02d}:{minutes:02d}:{seconds:02d}")
             print("-"*60)
-            print("🔄 Active Proxies:")
+            print("🔄 Proxy Status:")
             for ptype in ['http', 'socks4', 'socks5']:
                 count = len(self.proxy_manager.proxies[ptype])
-                print(f"   {ptype}: {count}")
+                bar = '█' * (count // 20) + '░' * (50 - (count // 20))
+                print(f"   {ptype}: {count:4d} {bar}")
+            print(f"   ⚠️ Bad: {len(self.proxy_manager.bad_proxies)}")
             print("="*60)
             print("🔥 Press Ctrl+C to stop")
             
             time.sleep(1)
+            
+    def proxy_updater(self):
+        """Update proxies periodically"""
+        while self.running:
+            time.sleep(120)  # Update every 2 minutes
+            self.proxy_manager.update_all()
             
     def run(self):
         """Main execution"""
         os.system('clear')
         
         print("="*60)
-        print("Telegram View Bot 2026 - Termux Version")
+        print("Telegram View Bot 2026 - Final Termux Edition")
         print("="*60)
         
-        # Get link
+        # Get post URL
         url = input("\n📎 Enter Telegram post URL: ").strip()
         
         try:
@@ -445,7 +516,7 @@ class TelegramViewBot:
             else:
                 self.channel, self.post = url.split('/')
         except:
-            print("❌ Invalid link!")
+            print("❌ Invalid URL!")
             return
             
         print(f"\n✅ Channel: {self.channel}")
@@ -453,38 +524,40 @@ class TelegramViewBot:
         
         # Initial proxy update
         print("\n🔄 Fetching initial proxies...")
-        self.proxy_manager.update_proxies()
+        self.proxy_manager.update_all()
         
+        if sum(len(p) for p in self.proxy_manager.proxies.values()) == 0:
+            print("❌ No proxies found! Check your internet connection.")
+            return
+            
         # Start threads
         threads = []
         
-        # Proxy update thread
-        update_thread = threading.Thread(target=self._proxy_updater, daemon=True)
-        update_thread.start()
-        threads.append(update_thread)
-        
         # Worker threads
+        print(f"\n🚀 Starting {Config.MAX_THREADS} workers...")
         for i in range(Config.MAX_THREADS):
-            proxy_type = random.choice(['http', 'socks4', 'socks5'])
-            worker = threading.Thread(
-                target=self.worker,
-                args=(proxy_type,),
-                daemon=True
-            )
-            worker.start()
-            threads.append(worker)
-            time.sleep(0.01)
-            
+            t = threading.Thread(target=self.worker, daemon=True)
+            t.start()
+            threads.append(t)
+            if i % 50 == 0:
+                time.sleep(0.1)
+                
         # Monitor thread
-        monitor = threading.Thread(target=self.monitor_views, daemon=True)
-        monitor.start()
-        threads.append(monitor)
+        t = threading.Thread(target=self.monitor_views, daemon=True)
+        t.start()
+        threads.append(t)
         
-        # Status display thread
-        status = threading.Thread(target=self.show_status, daemon=True)
-        status.start()
-        threads.append(status)
+        # Status thread
+        t = threading.Thread(target=self.show_status, daemon=True)
+        t.start()
+        threads.append(t)
         
+        # Proxy updater thread
+        t = threading.Thread(target=self.proxy_updater, daemon=True)
+        t.start()
+        threads.append(t)
+        
+        # Keep running
         try:
             while True:
                 time.sleep(1)
@@ -493,13 +566,12 @@ class TelegramViewBot:
             self.running = False
             time.sleep(2)
             
-    def _proxy_updater(self):
-        """Periodic proxy updater"""
-        while self.running:
-            time.sleep(120)  # Update every 2 minutes
-            self.proxy_manager.update_proxies()
+            # Save stats
+            with open(f'logs/session_{int(time.time())}.json', 'w') as f:
+                json.dump(self.stats, f)
+            print("✅ Session stats saved")
 
-# ==================== Main Execution ====================
+# ==================== Main Entry ====================
 if __name__ == "__main__":
     bot = TelegramViewBot()
     bot.run()
