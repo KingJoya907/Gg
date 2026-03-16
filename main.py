@@ -1,5 +1,5 @@
 """
-TELEGRAM VIEW BOT - ULTIMATE EDITION (FAST VERSION)
+TELEGRAM VIEW BOT - WORKING VERSION
 """
 
 import os
@@ -7,19 +7,17 @@ import sys
 import time
 import random
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime
 from threading import Thread, active_count
 from re import search, compile
 from collections import deque
 
-# نصب خودکار کتابخانه‌ها
+# نصب خودکار
 required_packages = ['requests', 'configparser', 'fake-useragent', 'colorama']
-
 for package in required_packages:
     try:
         __import__(package.replace('-', '_'))
     except ImportError:
-        print(f"📦 Installing {package}...")
         os.system(f'pip install {package} -q')
 
 import requests
@@ -29,32 +27,23 @@ from os import system, name
 from fake_useragent import UserAgent
 from colorama import init, Fore, Style
 
-# تنظیمات اولیه
 init(autoreset=True)
-system('cls' if name == 'nt' else 'clear')
 
-# ==================== تنظیمات اصلی ====================
-THREADS = 1000
+# ==================== تنظیمات ====================
+THREADS = 200  # کمتر برای شروع
 PROXIES_TYPES = ('http', 'socks4', 'socks5')
-time_out = 5
-proxy_update_interval = 300  # 5 دقیقه
-max_proxies_per_type = 5000
+time_out = 15  # بیشتر برای موفقیت
+max_proxies_per_type = 2000
 
-# ==================== User-Agent هوشمند ====================
+# ==================== User-Agent ====================
 try:
     ua = UserAgent()
-    def get_ua():
-        return ua.random
+    def get_ua(): return ua.random
 except:
-    USER_AGENTS = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    ]
-    def get_ua():
-        return random.choice(USER_AGENTS)
+    USER_AGENTS = ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36']
+    def get_ua(): return random.choice(USER_AGENTS)
 
-# ==================== Regex برای استخراج پروکسی ====================
+# ==================== Regex ====================
 REGEX = compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
                 + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
                 + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
@@ -63,172 +52,159 @@ REGEX = compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
                 + r"|65[0-4]\d{2}|655[0-2]\d|6553[0-5])")
                 + r")(?:\D|$)")
 
-# ==================== فایل خطاها ====================
+# ==================== فایل خطا ====================
 errors = open('errors.txt', 'a+', encoding='utf-8')
 
-# ==================== بارگذاری config.ini ====================
-cfg = ConfigParser(interpolation=None)
+# ==================== config.ini ====================
+cfg = ConfigParser()
 cfg.read("config.ini", encoding="utf-8")
 
 try:
     http = cfg["HTTP"]
     socks4 = cfg["SOCKS4"]
     socks5 = cfg["SOCKS5"]
-except KeyError:
-    print(Fore.RED + "❌ Error | config.ini not found!")
-    print(Fore.YELLOW + "📝 Creating default config.ini...")
-    
-    default_config = """[HTTP]
-Sources =
-    https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt
-    https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt
-    https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=5000&country=all
-
-[SOCKS4]
-Sources =
-    https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks4.txt
-    https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks4.txt
-    https://api.proxyscrape.com/v2/?request=getproxies&protocol=socks4&timeout=5000
-
-[SOCKS5]
-Sources =
-    https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt
-    https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks5.txt
-    https://api.proxyscrape.com/v2/?request=getproxies&protocol=socks5&timeout=5000
-"""
-    with open('config.ini', 'w', encoding='utf-8') as f:
-        f.write(default_config)
-    
-    print(Fore.GREEN + "✅ config.ini created! Please edit it and restart.")
-    sleep(5)
+except:
+    print(Fore.RED + "config.ini not found!")
     exit()
 
-# ==================== متغیرهای سراسری ====================
+# ==================== متغیرها ====================
 http_proxies = []
 socks4_proxies = []
 socks5_proxies = []
 proxy_errors = 0
 token_errors = 0
-total_views_sent = 0
+total_views = 0
 successful_views = 0
 channel = ''
 post = 0
 real_views = '0'
-proxy_scores = {}
-view_history = deque(maxlen=100)
+working_proxies = []
 start_time = datetime.now()
 
-# ==================== توابع سریع جمع‌آوری پروکسی ====================
+# ==================== جمع‌آوری پروکسی ====================
 
-def fast_scrap(sources, _proxy_type):
-    """جمع‌آوری سریع پروکسی بدون اعتبارسنجی اولیه"""
+def collect_proxies(sources, proxy_type):
+    """جمع‌آوری پروکسی"""
     for source in sources:
         if source and source.strip():
             try:
-                response = requests.get(source.strip(), timeout=10, headers={'User-Agent': get_ua()})
-                if response.status_code == 200:
-                    # استخراج سریع پروکسی‌ها
-                    for line in response.text.split('\n'):
+                r = requests.get(source.strip(), timeout=10)
+                if r.status_code == 200:
+                    for line in r.text.split('\n'):
                         line = line.strip()
-                        if ':' in line and len(line.split(':')) == 2:
-                            ip, port = line.split(':')
-                            # چک ساده فرمت
-                            if ip.count('.') == 3 and port.isdigit() and 1 <= int(port) <= 65535:
-                                if _proxy_type == 'http':
-                                    http_proxies.append(line)
-                                elif _proxy_type == 'socks4':
-                                    socks4_proxies.append(line)
-                                elif _proxy_type == 'socks5':
-                                    socks5_proxies.append(line)
-            except Exception as e:
-                errors.write(f'{datetime.now()} - Fast scrap error: {e}\n')
+                        if ':' in line and line.count('.') == 3:
+                            if proxy_type == 'http':
+                                http_proxies.append(line)
+                            elif proxy_type == 'socks4':
+                                socks4_proxies.append(line)
+                            elif proxy_type == 'socks5':
+                                socks5_proxies.append(line)
+            except:
+                pass
 
-def start_fast_scrap():
-    """شروع جمع‌آوری سریع"""
+def start_collection():
+    """شروع جمع‌آوری"""
     threads = []
     
-    # پاک کردن لیست‌ها
     http_proxies.clear()
     socks4_proxies.clear()
     socks5_proxies.clear()
     
-    sources_list = [
-        (http.get("Sources").splitlines() if http else [], 'http'),
-        (socks4.get("Sources").splitlines() if socks4 else [], 'socks4'),
-        (socks5.get("Sources").splitlines() if socks5 else [], 'socks5')
+    sources = [
+        (http.get("Sources").splitlines(), 'http'),
+        (socks4.get("Sources").splitlines(), 'socks4'),
+        (socks5.get("Sources").splitlines(), 'socks5')
     ]
     
-    for sources, ptype in sources_list:
-        if sources:
-            thread = Thread(target=fast_scrap, args=(sources, ptype))
-            threads.append(thread)
-            thread.start()
+    for src, ptype in sources:
+        t = Thread(target=collect_proxies, args=(src, ptype))
+        threads.append(t)
+        t.start()
     
     for t in threads:
-        t.join(timeout=20)  # حداکثر 20 ثانیه صبر کن
+        t.join(timeout=15)
     
-    # حذف تکراری‌ها
-    http_proxies[:] = list(set(http_proxies))[:max_proxies_per_type]
-    socks4_proxies[:] = list(set(socks4_proxies))[:max_proxies_per_type]
-    socks5_proxies[:] = list(set(socks5_proxies))[:max_proxies_per_type]
+    # حذف تکراری
+    http_proxies[:] = list(set(http_proxies))[:1000]
+    socks4_proxies[:] = list(set(socks4_proxies))[:1000]
+    socks5_proxies[:] = list(set(socks5_proxies))[:1000]
+    
+    print(Fore.GREEN + f"📡 HTTP: {len(http_proxies)} | SOCKS4: {len(socks4_proxies)} | SOCKS5: {len(socks5_proxies)}")
 
-def validate_proxy_quick(proxy, proxy_type):
-    """اعتبارسنجی سریع پروکسی"""
+# ==================== تست پروکسی ====================
+
+def test_proxy(proxy, proxy_type):
+    """تست اینکه پروکسی کار میکنه"""
     try:
         test_url = "http://httpbin.org/ip"
         proxies = {
             'http': f'{proxy_type}://{proxy}',
             'https': f'{proxy_type}://{proxy}'
         }
-        response = requests.get(test_url, proxies=proxies, timeout=2)
-        return response.status_code == 200
+        r = requests.get(test_url, proxies=proxies, timeout=5)
+        return r.status_code == 200
     except:
         return False
 
-# ==================== توابع اصلی ویو زدن ====================
+def filter_working_proxies():
+    """فقط پروکسی‌های کارآمد رو نگه دار"""
+    global http_proxies, socks4_proxies, socks5_proxies
+    
+    print(Fore.YELLOW + "🔍 Testing proxies (this may take a minute)...")
+    
+    working_http = []
+    for proxy in http_proxies[:200]:
+        if test_proxy(proxy, 'http'):
+            working_http.append(proxy)
+    
+    working_socks4 = []
+    for proxy in socks4_proxies[:200]:
+        if test_proxy(proxy, 'socks4'):
+            working_socks4.append(proxy)
+    
+    working_socks5 = []
+    for proxy in socks5_proxies[:200]:
+        if test_proxy(proxy, 'socks5'):
+            working_socks5.append(proxy)
+    
+    http_proxies = working_http
+    socks4_proxies = working_socks4
+    socks5_proxies = working_socks5
+    
+    total = len(http_proxies) + len(socks4_proxies) + len(socks5_proxies)
+    print(Fore.GREEN + f"✅ Working proxies: {total}")
+    return total > 0
 
-def get_token(proxy, proxy_type):
-    """گرفتن توکن ویو"""
+# ==================== ویو زدن ====================
+
+def send_view_request(proxy, proxy_type):
+    """ارسال یک ویو"""
+    global total_views, successful_views, proxy_errors, token_errors
+    
     try:
         session = requests.Session()
-        current_ua = get_ua()
         
-        response = session.get(
+        # گرفتن توکن
+        r1 = session.get(
             f'https://t.me/{channel}/{post}',
             params={'embed': '1', 'mode': 'tme'},
-            headers={
-                'referer': f'https://t.me/{channel}/{post}',
-                'user-agent': current_ua
-            },
+            headers={'user-agent': get_ua()},
             proxies={
                 'http': f'{proxy_type}://{proxy}',
                 'https': f'{proxy_type}://{proxy}'
             },
             timeout=time_out)
-
-        token = search(r'data-view="(\d+)"', response.text)
-        if token:
-            return token.group(1), session
-        return None
-
-    except:
-        return None
-
-def send_view(token, session, proxy, proxy_type):
-    """ارسال ویو"""
-    global total_views_sent, successful_views, view_history
-    
-    try:
-        cookies = session.cookies.get_dict()
         
-        response = session.get(
+        token = search(r'data-view="(\d+)"', r1.text)
+        if not token:
+            token_errors += 1
+            return False
+        
+        # ارسال ویو
+        r2 = session.get(
             'https://t.me/v/',
-            params={'views': token},
-            cookies={
-                'stel_ssid': cookies.get('stel_ssid', '')
-            },
+            params={'views': token.group(1)},
             headers={
-                'referer': f'https://t.me/{channel}/{post}?embed=1&mode=tme',
                 'user-agent': get_ua(),
                 'x-requested-with': 'XMLHttpRequest'
             },
@@ -237,82 +213,43 @@ def send_view(token, session, proxy, proxy_type):
                 'https': f'{proxy_type}://{proxy}'
             },
             timeout=time_out)
-
-        total_views_sent += 1
-        view_history.append(time.time())
         
-        if response.status_code == 200 and response.text.strip() == 'true':
+        total_views += 1
+        
+        if r2.status_code == 200 and 'true' in r2.text:
             successful_views += 1
             return True
-        return False
-
+        else:
+            proxy_errors += 1
+            return False
+            
     except:
+        proxy_errors += 1
         return False
 
 def worker():
-    """کارگر اصلی"""
-    global proxy_errors, token_errors
-    
+    """کارگر"""
     while True:
         try:
-            # انتخاب یه پروکسی تصادفی
-            if http_proxies and random.random() < 0.4:
-                proxy = random.choice(http_proxies)
-                proxy_type = 'http'
-            elif socks5_proxies and random.random() < 0.3:
-                proxy = random.choice(socks5_proxies)
-                proxy_type = 'socks5'
-            elif socks4_proxies:
-                proxy = random.choice(socks4_proxies)
-                proxy_type = 'socks4'
-            else:
-                sleep(0.1)
+            # انتخاب پروکسی
+            all_proxies = []
+            all_proxies.extend([('http', p) for p in http_proxies])
+            all_proxies.extend([('socks4', p) for p in socks4_proxies])
+            all_proxies.extend([('socks5', p) for p in socks5_proxies])
+            
+            if not all_proxies:
+                sleep(1)
                 continue
             
-            token_data = get_token(proxy, proxy_type)
+            proxy_type, proxy = random.choice(all_proxies)
+            send_view_request(proxy, proxy_type)
             
-            if token_data is None:
-                token_errors += 1
-            else:
-                result = send_view(token_data[0], token_data[1], proxy, proxy_type)
-                if not result:
-                    proxy_errors += 1
-                    
-        except Exception as e:
-            proxy_errors += 1
-
-# ==================== توابع مانیتورینگ ====================
-
-def calculate_speed():
-    """محاسبه سرعت"""
-    if len(view_history) < 2:
-        return 0
-    times = list(view_history)
-    time_diff = times[-1] - times[0]
-    if time_diff > 0:
-        return len(times) / time_diff
-    return 0
-
-def check_views():
-    """چک کردن ویوهای واقعی"""
-    global real_views
-    
-    while True:
-        try:
-            response = requests.get(
-                f'https://t.me/{channel}/{post}',
-                params={'embed': '1', 'mode': 'tme'},
-                headers={'user-agent': get_ua()},
-                timeout=5)
-
-            views = search(r'<span class="tgme_widget_message_views">([^<]+)', response.text)
-            if views:
-                real_views = views.group(1).strip()
-            sleep(3)
         except:
-            sleep(5)
+            sleep(0.1)
 
-def display_stats():
+# ==================== نمایش آمار ====================
+
+def show_stats():
     """نمایش آمار"""
     while True:
         system('cls' if name == 'nt' else 'clear')
@@ -321,91 +258,83 @@ def display_stats():
         minutes = int(elapsed.total_seconds() // 60)
         seconds = int(elapsed.total_seconds() % 60)
         
-        speed = calculate_speed()
+        speed = successful_views / (elapsed.total_seconds() + 0.1)
         total_proxies = len(http_proxies) + len(socks4_proxies) + len(socks5_proxies)
         
-        # باکس آمار
-        print(Fore.CYAN + "╔" + "═" * 60 + "╗")
-        print(Fore.CYAN + "║" + Fore.YELLOW + " " * 18 + "🔥 TELEGRAM VIEW BOT 🔥" + " " * 18 + Fore.CYAN + "║")
-        print(Fore.CYAN + "╠" + "═" * 60 + "╣")
+        print(Fore.CYAN + "╔" + "═" * 50 + "╗")
+        print(Fore.CYAN + "║" + Fore.YELLOW + " " * 15 + "TELEGRAM VIEW BOT" + " " * 15 + Fore.CYAN + "║")
+        print(Fore.CYAN + "╠" + "═" * 50 + "╣")
+        print(Fore.CYAN + "║ " + Fore.WHITE + f"TARGET".ljust(12) + ":" + Fore.GREEN + f" {channel}/{post}".ljust(30) + Fore.CYAN + "║")
+        print(Fore.CYAN + "║ " + Fore.WHITE + f"VIEWS".ljust(12) + ":" + Fore.GREEN + f" {real_views}".ljust(30) + Fore.CYAN + "║")
+        print(Fore.CYAN + "╠" + "═" * 50 + "╣")
+        print(Fore.CYAN + "║ " + Fore.GREEN + f"✅ SUCCESS".ljust(15) + f": {successful_views:>6,}" + " " * 10 + Fore.CYAN + "║")
+        print(Fore.CYAN + "║ " + Fore.YELLOW + f"📦 TOTAL".ljust(15) + f": {total_views:>6,}" + " " * 10 + Fore.CYAN + "║")
+        print(Fore.CYAN + "║ " + Fore.RED + f"❌ ERRORS".ljust(15) + f": {proxy_errors + token_errors:>6,}" + " " * 10 + Fore.CYAN + "║")
+        print(Fore.CYAN + "║ " + Fore.MAGENTA + f"⚡ SPEED".ljust(15) + f": {speed:>5.1f}/s" + " " * 11 + Fore.CYAN + "║")
+        print(Fore.CYAN + "╠" + "═" * 50 + "╣")
+        print(Fore.CYAN + "║ " + Fore.CYAN + f"PROXIES".ljust(50) + "║")
+        print(Fore.CYAN + "║ " + Fore.WHITE + f"HTTP: {len(http_proxies)} | SOCKS4: {len(socks4_proxies)} | SOCKS5: {len(socks5_proxies)}".ljust(48) + Fore.CYAN + "║")
+        print(Fore.CYAN + "╠" + "═" * 50 + "╣")
+        print(Fore.CYAN + "║ " + Fore.WHITE + f"TIME: {minutes:02d}:{seconds:02d}".ljust(25) + f"THREADS: {active_count()}/{THREADS}".ljust(23) + Fore.CYAN + "║")
+        print(Fore.CYAN + "╚" + "═" * 50 + "╝")
         
-        print(Fore.CYAN + "║ " + Fore.WHITE + f"TARGET".ljust(12) + ":" + Fore.GREEN + f" {channel}/{post}".ljust(40) + Fore.CYAN + "║")
-        print(Fore.CYAN + "║ " + Fore.WHITE + f"VIEWS".ljust(12) + ":" + Fore.GREEN + f" {real_views}".ljust(40) + Fore.CYAN + "║")
-        
-        print(Fore.CYAN + "╠" + "═" * 60 + "╣")
-        
-        print(Fore.CYAN + "║ " + Fore.GREEN + f"✅ SUCCESS".ljust(15) + f": {successful_views:>8,}" + 
-              " " * 10 + Fore.CYAN + "│" + Fore.YELLOW + f" TOTAL".ljust(10) + f": {total_views_sent:>8,}" + " " * 5 + Fore.CYAN + "║")
-        print(Fore.CYAN + "║ " + Fore.RED + f"❌ ERRORS".ljust(15) + f": {proxy_errors + token_errors:>8,}" + 
-              " " * 10 + Fore.CYAN + "│" + Fore.MAGENTA + f" SPEED".ljust(10) + f": {speed:>5.1f}/s" + " " * 7 + Fore.CYAN + "║")
-        
-        print(Fore.CYAN + "╠" + "═" * 60 + "╣")
-        
-        print(Fore.CYAN + "║ " + Fore.CYAN + f"PROXIES".ljust(60) + "║")
-        print(Fore.CYAN + "║ " + Fore.WHITE + f"  HTTP  : {len(http_proxies):>5,}".ljust(25) + 
-              Fore.WHITE + f"SOCKS4 : {len(socks4_proxies):>5,}".ljust(20) + 
-              Fore.WHITE + f"SOCKS5 : {len(socks5_proxies):>5,}".ljust(15) + Fore.CYAN + "║")
-        print(Fore.CYAN + "║ " + Fore.YELLOW + f"  TOTAL PROXIES: {total_proxies:,}".ljust(55) + Fore.CYAN + "║")
-        
-        print(Fore.CYAN + "╠" + "═" * 60 + "╣")
-        
-        print(Fore.CYAN + "║ " + Fore.WHITE + f"TIME".ljust(10) + f": {minutes:02d}:{seconds:02d}".ljust(15) + 
-              Fore.WHITE + f"THREADS".ljust(12) + f": {active_count():>3,}/{THREADS}".ljust(17) + Fore.CYAN + "║")
-        
-        print(Fore.CYAN + "╚" + "═" * 60 + "╝")
-        
-        # وضعیت
-        if speed > 20:
-            print(Fore.RED + "🚀 INSANE MODE")
-        elif speed > 10:
-            print(Fore.MAGENTA + "⚡ TURBO MODE")
-        elif speed > 0:
-            print(Fore.GREEN + "✅ WORKING")
-        else:
-            print(Fore.YELLOW + "⏳ COLLECTING PROXIES...")
-        
-        sleep(1.5)
+        sleep(2)
+
+def check_real_views():
+    """چک کردن ویو واقعی"""
+    global real_views
+    while True:
+        try:
+            r = requests.get(f'https://t.me/{channel}/{post}', params={'embed': '1'}, timeout=5)
+            views = search(r'<span class="tgme_widget_message_views">([^<]+)', r.text)
+            if views:
+                real_views = views.group(1)
+            sleep(3)
+        except:
+            sleep(5)
 
 # ==================== شروع ====================
 
 def main():
     global channel, post
     
-    print(Fore.CYAN + """
-╔════════════════════════════════════════════════════╗
-║     🔥 TELEGRAM VIEW BOT - FAST EDITION 🔥       ║
-╚════════════════════════════════════════════════════╝
-""")
+    system('cls' if name == 'nt' else 'clear')
     
-    url = input(Fore.YELLOW + "📌 Enter URL: " + Fore.WHITE).strip()
+    print(Fore.CYAN + "╔════════════════════════════════════╗")
+    print(Fore.CYAN + "║     TELEGRAM VIEW BOT v2.0        ║")
+    print(Fore.CYAN + "╚════════════════════════════════════╝")
+    
+    url = input(Fore.YELLOW + "URL: " + Fore.WHITE).strip()
     
     try:
         channel, post = url.replace('https://t.me/', '').split('/')
         post = int(post)
     except:
-        print(Fore.RED + "❌ Invalid URL!")
+        print(Fore.RED + "Invalid URL!")
         return
     
     print(Fore.GREEN + f"\n✅ Target: {channel}/{post}")
     print(Fore.CYAN + "📡 Collecting proxies...")
     
-    # جمع‌آوری سریع
-    start_fast_scrap()
+    start_collection()
     
-    print(Fore.GREEN + f"✅ HTTP: {len(http_proxies)} | SOCKS4: {len(socks4_proxies)} | SOCKS5: {len(socks5_proxies)}")
-    print(Fore.YELLOW + "🚀 Starting workers...")
+    print(Fore.YELLOW + "🔍 Filtering working proxies...")
+    if not filter_working_proxies():
+        print(Fore.RED + "❌ No working proxies found!")
+        return
+    
+    print(Fore.GREEN + "🚀 Starting workers...")
     
     # شروع تردها
     for i in range(THREADS):
         Thread(target=worker, daemon=True).start()
     
-    Thread(target=check_views, daemon=True).start()
-    display_stats()
+    Thread(target=check_real_views, daemon=True).start()
+    show_stats()
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print(Fore.RED + "\n\n⚠️ Stopped")
-        print(Fore.GREEN + f"✅ Total Views: {successful_views:,}")
+        print(Fore.RED + "\nStopped")
         errors.close()
