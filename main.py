@@ -27,7 +27,7 @@ from urllib.parse import urlparse
 import ipaddress
 
 # نصب خودکار کتابخانه‌های مورد نیاز
-required_packages = ['aiohttp', 'colorama', 'aiohttp-socks', 'beautifulsoup4']
+required_packages = ['aiohttp', 'colorama', 'beautifulsoup4']
 
 for package in required_packages:
     try:
@@ -126,7 +126,7 @@ class ConfigLoader:
                 ]
                 logger.info(f"✅ {len(config.socks5_sources)} منبع SOCKS5 بارگذاری شد")
             
-            # تنظیمات اضافی می‌توانید اضافه کنید
+            # تنظیمات اضافی
             if 'SETTINGS' in parser:
                 settings = parser['SETTINGS']
                 config.threads = int(settings.get('threads', '2000'))
@@ -303,37 +303,38 @@ class TelegramViewer:
     
     async def create_session_pool(self):
         """ایجاد استخر session برای حداکثر سرعت"""
-        connector = TCPConnector(
-            limit=0,
-            limit_per_host=0,
-            ttl_dns_cache=600,
-            ssl=False,
-            use_dns_cache=True,
-            force_close=False,
-            enable_cleanup_closed=True
-        )
-        
-        timeout = ClientTimeout(
-            total=self.config.timeout,
-            connect=3,
-            sock_read=self.config.timeout
-        )
-        
-        # ایجاد 500 session برای هر نوع پروکسی
-        sessions_per_type = 500
+        # ایجاد connector مستقل برای هر session
+        sessions_per_type = 300  # کاهش دادم به 300 برای پایداری بیشتر
         
         for proxy_type in self.session_pool.keys():
             sessions = []
             for i in range(sessions_per_type):
+                connector = TCPConnector(
+                    limit=100,
+                    limit_per_host=0,
+                    ttl_dns_cache=600,
+                    ssl=False,
+                    use_dns_cache=True,
+                    force_close=False,
+                    enable_cleanup_closed=True
+                )
+                
+                timeout = ClientTimeout(
+                    total=self.config.timeout,
+                    connect=3,
+                    sock_read=self.config.timeout
+                )
+                
                 session = aiohttp.ClientSession(
-                    connector=connector.clone(),
+                    connector=connector,
                     timeout=timeout,
                     headers={'User-Agent': self.config.user_agent}
                 )
                 sessions.append(session)
             self.session_pool[proxy_type] = sessions
         
-        logger.info(f"✅ {Fore.GREEN}استخر session با {sessions_per_type*3:,} کانکشن ساخته شد{Style.RESET_ALL}")
+        total_sessions = sum(len(s) for s in self.session_pool.values())
+        logger.info(f"✅ {Fore.GREEN}استخر session با {total_sessions:,} کانکشن ساخته شد{Style.RESET_ALL}")
     
     async def send_view(self, session: aiohttp.ClientSession, proxy: str, proxy_type: str) -> bool:
         """ارسال ویو با بهینه‌ترین روش"""
@@ -388,7 +389,7 @@ class TelegramViewer:
             ) as response:
                 if response.status == 200:
                     text = await response.text()
-                    if 'true' in text:
+                    if 'true' in text.lower():
                         self.stats['successful_views'] += 1
                         self.stats['total_views'] += 1
                         self.view_counter += 1
@@ -419,8 +420,12 @@ class TelegramViewer:
                 
                 await self.send_view(session, proxy, proxy_type)
                 
+                # کنترل نرخ درخواست
+                await asyncio.sleep(0.05)  # 20 درخواست در ثانیه
+                
             except Exception as e:
                 logger.debug(f"خطا در worker {worker_id}: {e}")
+                await asyncio.sleep(0.1)
     
     async def monitor_stats(self):
         """مانیتورینگ لحظه‌ای"""
@@ -481,7 +486,7 @@ class TelegramViewer:
         await self.create_session_pool()
         
         # محاسبه تعداد کارگرها برای هر نوع پروکسی
-        workers_per_type = self.config.threads // 3
+        workers_per_type = min(500, self.config.threads // 3)
         
         # ایجاد کارگرها
         workers = []
@@ -511,7 +516,10 @@ class TelegramViewer:
         
         for sessions in self.session_pool.values():
             for session in sessions:
-                await session.close()
+                try:
+                    await session.close()
+                except:
+                    pass
         
         elapsed = time.time() - self.stats['start_time']
         logger.info(f"{Fore.GREEN}📊 آمار نهایی:{Style.RESET_ALL}")
@@ -529,7 +537,7 @@ async def main():
 ╚══════════════════════════════════════════════════════════════╝
 {Style.RESET_ALL}""")
     
-    # بارگذازی تنظیمات از config.ini شما
+    # بارگذاری تنظیمات از config.ini شما
     config = ConfigLoader.load_from_ini('config.ini')
     
     if not (config.http_sources or config.socks4_sources or config.socks5_sources):
@@ -562,6 +570,8 @@ async def main():
         logger.info(f"{Fore.YELLOW}⏹️ توقف توسط کاربر{Style.RESET_ALL}")
     except Exception as e:
         logger.error(f"{Fore.RED}❌ خطا: {e}{Style.RESET_ALL}")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
