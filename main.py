@@ -6,13 +6,33 @@ try:
  from os import system, name
  from threading import Thread, active_count
  from re import search, compile
+ import random
+ from fake_useragent import UserAgent
 except:
  os.system('pip install requests')
  os.system('pip install configparser')
+ os.system('pip install fake-useragent')
 
 THREADS = 500
 PROXIES_TYPES = ('http', 'socks4', 'socks5')
-USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36'
+
+# User-Agent generator
+try:
+ ua = UserAgent()
+ def get_ua():
+     return ua.random
+except:
+ # Fallback if fake-useragent fails
+ USER_AGENTS = [
+     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+     'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+     'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
+     'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+ ]
+ def get_ua():
+     return random.choice(USER_AGENTS)
 
 REGEX = compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
                 + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
@@ -79,13 +99,14 @@ def start_scrap():
 def get_token(proxy, proxy_type):
     try:
         session = requests.session()
+        current_ua = get_ua()  # Get random User-Agent
 
         response = session.get(
             f'https://t.me/{channel}/{post}',
             params={'embed': '1', 'mode': 'tme'},
             headers={
                 'referer': f'https://t.me/{channel}/{post}',
-                'user-agent': USER_AGENT
+                'user-agent': current_ua
             },
             proxies={
                 'http': f'{proxy_type}://{proxy}',
@@ -108,6 +129,7 @@ def send_view(token, session, proxy, proxy_type):
     
     try:
         cookies_dict = session.cookies.get_dict()
+        current_ua = get_ua()  # Get random User-Agent for view request too
 
         response = session.get(
             'https://t.me/v/',
@@ -120,7 +142,7 @@ def send_view(token, session, proxy, proxy_type):
             },
             headers={
                 'referer': f'https://t.me/{channel}/{post}?embed=1&mode=tme',
-                'user-agent': USER_AGENT,
+                'user-agent': current_ua,
                 'x-requested-with': 'XMLHttpRequest'
             },
             proxies={
@@ -158,25 +180,76 @@ def control(proxy, proxy_type):
 
 
 def print_stats():
-    """Print statistics in English"""
+    """Ultimate professional statistics display"""
+    from datetime import datetime
+    start_time = datetime.now()
+    
     while True:
         system('cls' if name == 'nt' else 'clear')
-        print("=" * 60)
-        print("           TELEGRAM VIEW BOT STATISTICS")
-        print("=" * 60)
-        print(f"Channel: {channel}/{post}")
-        print(f"Current Views: {real_views}")
-        print("-" * 60)
-        print(f"✅ Successful Views: {successful_views:,}")
-        print(f"🔄 Total Views Sent: {total_views_sent:,}")
-        print(f"❌ Proxy Errors: {proxy_errors:,}")
-        print(f"⚠️ Token Errors: {token_errors:,}")
-        print("-" * 60)
-        print(f"HTTP Proxies: {len(http_proxies):,}")
-        print(f"SOCKS4 Proxies: {len(socks4_proxies):,}")
-        print(f"SOCKS5 Proxies: {len(socks5_proxies):,}")
-        print("=" * 60)
+        
+        # Calculate time elapsed
+        elapsed = datetime.now() - start_time
+        hours = int(elapsed.total_seconds() // 3600)
+        minutes = int((elapsed.total_seconds() % 3600) // 60)
+        seconds = int(elapsed.total_seconds() % 60)
+        
+        # Calculate speeds
+        current_speed = successful_views / (elapsed.total_seconds() + 0.1)
+        success_rate = (successful_views / (total_views_sent + 0.1)) * 100
+        
+        # Total proxies
+        total_proxies = len(http_proxies) + len(socks4_proxies) + len(socks5_proxies)
+        
+        print("╔" + "═" * 60 + "╗")
+        print("║" + " " * 15 + "🔥 TELEGRAM VIEW BOT ULTIMATE 🔥" + " " * 14 + "║")
+        print("╠" + "═" * 60 + "╣")
+        print(f"║ 📌 TARGET     : {channel}/{post:<30} ║")
+        print(f"║ 👁️  CURRENT    : {str(real_views):<10} views{' ' * 30}║")
+        print("╠" + "═" * 60 + "╣")
+        print(f"║ ✅ SUCCESS     : {successful_views:>10,} views{' ' * 31}║")
+        print(f"║ 🔄 TOTAL SENT  : {total_views_sent:>10,} requests{' ' * 29}║")
+        print(f"║ ❌ PROXY ERR   : {proxy_errors:>10,}{' ' * 38}║")
+        print(f"║ ⚠️  TOKEN ERR   : {token_errors:>10,}{' ' * 38}║")
+        print("╠" + "═" * 60 + "╣")
+        print(f"║ ⚡ SPEED        : {current_speed:>8.2f} views/sec{' ' * 28}║")
+        print(f"║ 📊 SUCCESS RATE : {success_rate:>8.2f}%{' ' * 31}║")
+        print("╠" + "═" * 60 + "╣")
+        print(f"║ 🌐 HTTP PROXIES : {len(http_proxies):>8,}{' ' * 35}║")
+        print(f"║ 🔷 SOCKS4       : {len(socks4_proxies):>8,}{' ' * 35}║")
+        print(f"║ 🔶 SOCKS5       : {len(socks5_proxies):>8,}{' ' * 35}║")
+        print(f"║ 📦 TOTAL PROXIES: {total_proxies:>8,}{' ' * 35}║")
+        print("╠" + "═" * 60 + "╣")
+        print(f"║ ⏱️  RUNTIME      : {hours:02d}:{minutes:02d}:{seconds:02d}{' ' * 33}║")
+        print("╚" + "═" * 60 + "╝")
+        
+        thread_count = active_count()
+        print(f"\n🔧 Active Threads: {thread_count:,} | ⚙️  Max Threads: {THREADS}")
+        print(f"🔄 Last User-Agent: {get_ua()[:30]}...")
+        
         sleep(2)
+
+
+def check_views():
+    global real_views
+
+    while True:
+        try:
+            telegram_request = requests.get(
+                f'https://t.me/{channel}/{post}',
+                params={'embed': '1', 'mode': 'tme'},
+                headers={
+                    'referer': f'https://t.me/{channel}/{post}',
+                    'user-agent': get_ua()
+                })
+
+            real_views = search(
+                '<span class="tgme_widget_message_views">([^<]+)',
+                telegram_request.text).group(1)
+
+            sleep(2)
+
+        except:
+            pass
 
 
 def start_view():
@@ -201,32 +274,16 @@ def start_view():
         start_view()
 
 
-def check_views():
-    global real_views
-
-    while True:
-        try:
-            telegram_request = requests.get(
-                f'https://t.me/{channel}/{post}',
-                params={'embed': '1', 'mode': 'tme'},
-                headers={
-                    'referer': f'https://t.me/{channel}/{post}',
-                    'user-agent': USER_AGENT
-                })
-
-            real_views = search(
-                '<span class="tgme_widget_message_views">([^<]+)',
-                telegram_request.text).group(1)
-
-            sleep(2)
-
-        except:
-            pass
-
-
 system('cls' if name == 'nt' else 'clear')
 
-channel, post = input("TeleGram View Post URL ==> ").replace('https://t.me/', '').split('/')
+channel, post = input("🔥 Telegram View Post URL ==> ").replace('https://t.me/', '').split('/')
+
+print("\n" + "=" * 50)
+print("🚀 INITIALIZING ULTIMATE VIEW BOT...")
+print("📡 COLLECTING PROXIES...")
+print("⚡ PREPARING THREADS...")
+print("=" * 50 + "\n")
+sleep(2)
 
 # Start all threads
 Thread(target=start_view).start()
