@@ -9,60 +9,61 @@ import threading
 from datetime import datetime
 from configparser import ConfigParser
 
-# ========== رنگها ==========
-G = '\033[92m'  # سبز
-Y = '\033[93m'  # زرد
-R = '\033[91m'  # قرمز
-B = '\033[94m'  # آبی
-C = '\033[96m'  # فیروزه ای
-M = '\033[95m'  # بنفش
-W = '\033[97m'  # سفید
-X = '\033[0m'   # پایان
-Z = '\033[1m'   # پررنگ
+# ========== Colors ==========
+GREEN = '\033[92m'
+YELLOW = '\033[93m'
+RED = '\033[91m'
+BLUE = '\033[94m'
+CYAN = '\033[96m'
+MAGENTA = '\033[95m'
+WHITE = '\033[97m'
+RESET = '\033[0m'
+BOLD = '\033[1m'
 
-# ========== کادر ==========
-UP = f"{C}╔═══════════════════════════════════════════════════════════════════════╗{X}"
-MD = f"{C}║{X}"
-DN = f"{C}╚═══════════════════════════════════════════════════════════════════════╝{X}"
-LN = f"{C}╟───────────────────────────────────────────────────────────────────────╢{X}"
+# ========== Box ==========
+TOP = f"{CYAN}╔═══════════════════════════════════════════════════════════════════════╗{RESET}"
+MID = f"{CYAN}║{RESET}"
+BOT = f"{CYAN}╚═══════════════════════════════════════════════════════════════════════╝{RESET}"
+LINE = f"{CYAN}╟───────────────────────────────────────────────────────────────────────╢{RESET}"
 
-# ========== نصب کتابخانه ==========
+# ========== Install Requirements ==========
 try:
     import requests
 except:
     os.system('pip install requests > /dev/null 2>&1')
     import requests
 
-# ========== لوگو ==========
-def logo():
+# ========== Logo ==========
+def show_logo():
     os.system('clear')
-    print(f"""
-{Z}{C}╔═══════════════════════════════════════════════════════════════════════╗
+    logo = f"""
+{BOLD}{CYAN}╔═══════════════════════════════════════════════════════════════════════╗
 ║                                                                       ║
-║        {G}██╗ ██████╗ ██╗   ██╗ █████╗     ██╗   ██╗██╗██╗██╗{C}           ║
-║        {G}██║██╔═══██╗╚██╗ ██╔╝██╔══██╗    ██║   ██║██║██║██║{C}           ║
-║        {G}██║██║   ██║ ╚████╔╝ ███████║    ██║   ██║██║██║██║{C}           ║
-║        {G}██║██║   ██║  ╚██╔╝  ██╔══██║    ╚██╗ ██╔╝██║██║██║{C}           ║
-║        {G}██║╚██████╔╝   ██║   ██║  ██║     ╚████╔╝ ██║██║██║{C}           ║
-║        {G}╚═╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝      ╚═══╝  ╚═╝╚═╝╚═╝{C}           ║
+║     {GREEN}██╗ ██████╗ ██╗   ██╗ █████╗     {BLUE}██╗   ██╗██╗██╗██╗{CYAN}           ║
+║     {GREEN}██║██╔═══██╗╚██╗ ██╔╝██╔══██╗    {BLUE}██║   ██║██║██║██║{CYAN}           ║
+║     {GREEN}██║██║   ██║ ╚████╔╝ ███████║    {BLUE}██║   ██║██║██║██║{CYAN}           ║
+║     {GREEN}██║██║   ██║  ╚██╔╝  ██╔══██║    {BLUE}╚██╗ ██╔╝██║██║██║{CYAN}           ║
+║     {GREEN}██║╚██████╔╝   ██║   ██║  ██║     {BLUE}╚████╔╝ ██║██║██║{CYAN}           ║
+║     {GREEN}╚═╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝      {BLUE}╚═══╝  ╚═╝╚═╝╚═╝{CYAN}           ║
 ║                                                                       ║
-║                    {Y}██╗   ██╗██╗███████╗██╗{C}                           ║
-║                    {Y}██║   ██║██║██╔════╝██║{C}                           ║
-║                    {Y}██║   ██║██║█████╗  ██║{C}                           ║
-║                    {Y}╚██╗ ██╔╝██║██╔══╝  ██║{C}                           ║
-║                    {Y} ╚████╔╝ ██║███████╗██║{C}                           ║
-║                    {Y}  ╚═══╝  ╚═╝╚══════╝╚═╝{C}                           ║
+║                       {YELLOW}███████╗██╗███████╗██╗{CYAN}                         ║
+║                       {YELLOW}██╔════╝██║██╔════╝██║{CYAN}                         ║
+║                       {YELLOW}█████╗  ██║█████╗  ██║{CYAN}                         ║
+║                       {YELLOW}██╔══╝  ██║██╔══╝  ██║{CYAN}                         ║
+║                       {YELLOW}███████╗██║███████╗██║{CYAN}                         ║
+║                       {YELLOW}╚══════╝╚═╝╚══════╝╚═╝{CYAN}                         ║
 ║                                                                       ║
-║                 {G}⚡ {Z}جویا ویو ۳.۰{X}{G} ⚡{C}                           ║
-╚═══════════════════════════════════════════════════════════════════════╝{X}
-""")
+║                    {GREEN}⚡ {BOLD}JOYA VIEW v3.0{RESET}{GREEN} ⚡{CYAN}                     ║
+╚═══════════════════════════════════════════════════════════════════════╝{RESET}
+"""
+    print(logo)
 
-# ========== تنظیمات ==========
+# ========== Settings ==========
 MAX_THREADS = 200
 TIMEOUT = 15
 USER_AGENT = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36'
 
-# ========== الگوی پروکسی ==========
+# ========== Proxy Regex ==========
 PROXY_REGEX = re.compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
                 + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
                 + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
@@ -71,41 +72,41 @@ PROXY_REGEX = re.compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0
                 + r"|65[0-4]\d{2}|655[0-2]\d|6553[0-5])")
                 + r")(?:\D|$)")
 
-# ========== کلاس اصلی ==========
+# ========== Main Class ==========
 class JoyaView:
     def __init__(self):
-        self.http_list = []
-        self.socks4_list = []
-        self.socks5_list = []
+        self.http_proxies = []
+        self.socks4_proxies = []
+        self.socks5_proxies = []
         
-        # آمار
-        self.total = 0
-        self.active = 0
-        self.sent = 0
-        self.failed = 0
-        self.bad_token = 0
-        self.proxy_error = 0
+        # Statistics
+        self.total_proxies = 0
+        self.active_proxies = 0
+        self.views_sent = 0
+        self.views_failed = 0
+        self.bad_tokens = 0
+        self.proxy_errors = 0
         self.current_views = "0"
         
-        # اطلاعات
+        # Info
         self.channel = ""
         self.post_id = ""
         self.start_time = time.time()
         self.running = True
         self.lock = threading.Lock()
         
-        # منابع
+        # Sources
         self.http_sources = []
         self.socks4_sources = []
         self.socks5_sources = []
         
-        # فایل خطا
+        # Error file
         self.error_file = None
     
     def load_config(self):
-        """خواندن فایل config.ini"""
+        """Load config.ini file"""
         if not os.path.exists('config.ini'):
-            print(f"{R}{MD}  فایل config.ini پیدا نشد!                 {DN}")
+            print(f"{RED}{MID}  config.ini not found!                      {BOT}")
             return False
         
         try:
@@ -124,51 +125,51 @@ class JoyaView:
                 src = cfg['SOCKS5'].get('Sources', '').splitlines()
                 self.socks5_sources = [s.strip() for s in src if s.strip() and ';' not in s]
             
-            print(f"{G}{MD}  config.ini با موفقیت بارگذاری شد          {DN}")
+            print(f"{GREEN}{MID}  config.ini loaded successfully             {BOT}")
             return True
             
         except:
-            print(f"{R}{MD}  config.ini خراب است!                      {DN}")
+            print(f"{RED}{MID}  config.ini is corrupted!                   {BOT}")
             return False
     
     def collect_proxies(self):
-        """جمع آوری پروکسی ها"""
+        """Collect proxies from all sources"""
         self.error_file = open('errors.txt', 'a+', encoding='utf-8')
         
-        self.http_list.clear()
-        self.socks4_list.clear()
-        self.socks5_list.clear()
+        self.http_proxies.clear()
+        self.socks4_proxies.clear()
+        self.socks5_proxies.clear()
         
-        print(f"{C}{UP}")
-        print(f"{MD}  {Z}در حال جمع آوری پروکسی...{X}                              {DN}")
+        print(f"{CYAN}{TOP}")
+        print(f"{MID}  {BOLD}Collecting proxies...{RESET}                              {BOT}")
         
         threads = []
         
         if self.http_sources:
-            t = threading.Thread(target=self.fetch, args=(self.http_sources, 'HTTP', self.http_list))
+            t = threading.Thread(target=self.fetch, args=(self.http_sources, 'HTTP', self.http_proxies))
             threads.append(t)
             t.start()
         
         if self.socks4_sources:
-            t = threading.Thread(target=self.fetch, args=(self.socks4_sources, 'SOCKS4', self.socks4_list))
+            t = threading.Thread(target=self.fetch, args=(self.socks4_sources, 'SOCKS4', self.socks4_proxies))
             threads.append(t)
             t.start()
         
         if self.socks5_sources:
-            t = threading.Thread(target=self.fetch, args=(self.socks5_sources, 'SOCKS5', self.socks5_list))
+            t = threading.Thread(target=self.fetch, args=(self.socks5_sources, 'SOCKS5', self.socks5_proxies))
             threads.append(t)
             t.start()
         
         for t in threads:
             t.join()
         
-        self.total = len(self.http_list) + len(self.socks4_list) + len(self.socks5_list)
+        self.total_proxies = len(self.http_proxies) + len(self.socks4_proxies) + len(self.socks5_proxies)
         
-        print(f"{G}{MD}  کل: {self.total} | HTTP: {len(self.http_list)} | S4: {len(self.socks4_list)} | S5: {len(self.socks5_list)}  {DN}")
-        print(f"{C}{DN}")
+        print(f"{GREEN}{MID}  Total: {self.total_proxies} | HTTP: {len(self.http_proxies)} | S4: {len(self.socks4_proxies)} | S5: {len(self.socks5_proxies)}  {BOT}")
+        print(f"{CYAN}{BOT}")
     
     def fetch(self, sources, ptype, plist):
-        """دریافت پروکسی از منابع"""
+        """Fetch proxies from sources"""
         for src in sources:
             try:
                 r = requests.get(src, timeout=TIMEOUT)
@@ -178,12 +179,12 @@ class JoyaView:
                         plist.append(m.group(1))
                         count += 1
                     with self.lock:
-                        print(f"{G}{MD}  ✓ {ptype}: +{count}                     {DN}")
+                        print(f"{GREEN}{MID}  ✓ {ptype}: +{count} proxies                {BOT}")
             except:
                 pass
     
     def get_token(self, proxy, ptype):
-        """دریافت توکن"""
+        """Get view token"""
         try:
             session = requests.Session()
             r = session.get(
@@ -199,7 +200,7 @@ class JoyaView:
             return None, None
     
     def send_view(self, token, session, proxy, ptype):
-        """ارسال ویو"""
+        """Send view"""
         try:
             cookie = session.cookies.get_dict()
             r = session.get(
@@ -214,29 +215,29 @@ class JoyaView:
         except:
             return False
     
-    def process(self, proxy, ptype):
-        """پردازش یک پروکسی"""
+    def process_proxy(self, proxy, ptype):
+        """Process single proxy"""
         with self.lock:
-            self.active += 1
+            self.active_proxies += 1
         
         token, session = self.get_token(proxy, ptype)
         
         if token:
             if self.send_view(token, session, proxy, ptype):
                 with self.lock:
-                    self.sent += 1
+                    self.views_sent += 1
             else:
                 with self.lock:
-                    self.failed += 1
+                    self.views_failed += 1
         else:
             with self.lock:
-                self.bad_token += 1
+                self.bad_tokens += 1
         
         with self.lock:
-            self.active -= 1
+            self.active_proxies -= 1
     
-    def check_views(self):
-        """بررسی ویو فعلی"""
+    def check_current_views(self):
+        """Check current view count"""
         while self.running:
             try:
                 r = requests.get(
@@ -252,55 +253,55 @@ class JoyaView:
             except:
                 time.sleep(2)
     
-    def display(self):
-        """نمایش آمار"""
+    def show_stats(self):
+        """Display statistics"""
         while self.running:
-            logo()
+            show_logo()
             
             elapsed = int(time.time() - self.start_time)
             h = elapsed // 3600
             m = (elapsed % 3600) // 60
             s = elapsed % 60
             
-            print(f"{C}{UP}")
-            print(f"{MD}  {Z}کانال:{X} {G}{self.channel}{X}                       {DN}")
-            print(f"{MD}  {Z}شماره:{X} {G}{self.post_id}{X}                       {DN}")
-            print(f"{C}{LN}")
+            print(f"{CYAN}{TOP}")
+            print(f"{MID}  {BOLD}Channel:{RESET} {GREEN}{self.channel}{RESET}                       {BOT}")
+            print(f"{MID}  {BOLD}Post ID:{RESET} {GREEN}{self.post_id}{RESET}                       {BOT}")
+            print(f"{CYAN}{LINE}")
             
-            print(f"{MD}  {Z}ویو فعلی:{X} {G}{self.current_views}{X}                  {DN}")
-            print(f"{MD}  {Z}ارسال شده:{X} {G}{self.sent}{X}                    {DN}")
-            print(f"{MD}  {Z}ناموفق:{X} {R}{self.failed}{X}                      {DN}")
-            print(f"{MD}  {Z}توکن خراب:{X} {R}{self.bad_token}{X}                {DN}")
-            print(f"{MD}  {Z}خطاهای پروکسی:{X} {R}{self.proxy_error}{X}          {DN}")
-            print(f"{C}{LN}")
+            print(f"{MID}  {BOLD}Current Views:{RESET} {GREEN}{self.current_views}{RESET}                  {BOT}")
+            print(f"{MID}  {BOLD}Views Sent:{RESET} {GREEN}{self.views_sent}{RESET}                    {BOT}")
+            print(f"{MID}  {BOLD}Failed Views:{RESET} {RED}{self.views_failed}{RESET}                    {BOT}")
+            print(f"{MID}  {BOLD}Bad Tokens:{RESET} {RED}{self.bad_tokens}{RESET}                      {BOT}")
+            print(f"{MID}  {BOLD}Proxy Errors:{RESET} {RED}{self.proxy_errors}{RESET}                   {BOT}")
+            print(f"{CYAN}{LINE}")
             
-            print(f"{MD}  {Z}کل پروکسی:{X} {B}{self.total}{X}                       {DN}")
-            print(f"{MD}  {Z}فعال:{X} {G}{self.active}{X}                           {DN}")
-            print(f"{MD}  {Z}HTTP:{X} {C}{len(self.http_list)}{X}                      {DN}")
-            print(f"{MD}  {Z}SOCKS4:{X} {C}{len(self.socks4_list)}{X}                   {DN}")
-            print(f"{MD}  {Z}SOCKS5:{X} {C}{len(self.socks5_list)}{X}                   {DN}")
-            print(f"{C}{LN}")
+            print(f"{MID}  {BOLD}Total Proxies:{RESET} {BLUE}{self.total_proxies}{RESET}                   {BOT}")
+            print(f"{MID}  {BOLD}Active:{RESET} {GREEN}{self.active_proxies}{RESET}                         {BOT}")
+            print(f"{MID}  {BOLD}HTTP:{RESET} {CYAN}{len(self.http_proxies)}{RESET}                        {BOT}")
+            print(f"{MID}  {BOLD}SOCKS4:{RESET} {CYAN}{len(self.socks4_proxies)}{RESET}                     {BOT}")
+            print(f"{MID}  {BOLD}SOCKS5:{RESET} {CYAN}{len(self.socks5_proxies)}{RESET}                     {BOT}")
+            print(f"{CYAN}{LINE}")
             
-            print(f"{MD}  {Z}زمان:{X} {Y}{h:02d}:{m:02d}:{s:02d}{X}                       {DN}")
-            print(f"{C}{DN}")
-            print(f"{Y}{MD}  Ctrl+C برای توقف{X}                           {DN}")
-            print(f"{C}{DN}")
+            print(f"{MID}  {BOLD}Runtime:{RESET} {YELLOW}{h:02d}:{m:02d}:{s:02d}{RESET}                       {BOT}")
+            print(f"{CYAN}{BOT}")
+            print(f"{YELLOW}{MID}  Press Ctrl+C to stop{RESET}                           {BOT}")
+            print(f"{CYAN}{BOT}")
             
             time.sleep(1)
     
     def worker(self):
-        """کارگر اصلی"""
+        """Main worker thread"""
         while self.running:
             self.collect_proxies()
             
-            if self.total == 0:
+            if self.total_proxies == 0:
                 time.sleep(10)
                 continue
             
             threads = []
             
-            for p in self.http_list[:50]:
-                t = threading.Thread(target=self.process, args=(p, 'http'))
+            for p in self.http_proxies[:50]:
+                t = threading.Thread(target=self.process_proxy, args=(p, 'http'))
                 threads.append(t)
                 while threading.active_count() > MAX_THREADS:
                     time.sleep(0.1)
@@ -308,8 +309,8 @@ class JoyaView:
             
             time.sleep(1)
             
-            for p in self.socks4_list[:50]:
-                t = threading.Thread(target=self.process, args=(p, 'socks4'))
+            for p in self.socks4_proxies[:50]:
+                t = threading.Thread(target=self.process_proxy, args=(p, 'socks4'))
                 threads.append(t)
                 while threading.active_count() > MAX_THREADS:
                     time.sleep(0.1)
@@ -317,8 +318,8 @@ class JoyaView:
             
             time.sleep(1)
             
-            for p in self.socks5_list[:50]:
-                t = threading.Thread(target=self.process, args=(p, 'socks5'))
+            for p in self.socks5_proxies[:50]:
+                t = threading.Thread(target=self.process_proxy, args=(p, 'socks5'))
                 threads.append(t)
                 while threading.active_count() > MAX_THREADS:
                     time.sleep(0.1)
@@ -328,42 +329,42 @@ class JoyaView:
                 t.join()
     
     def run(self):
-        """اجرای ربات"""
+        """Run the bot"""
         try:
-            logo()
+            show_logo()
             
             if not self.load_config():
-                input(f"{Y}{MD}  اینتر را بزنید...{X}                     {DN}")
+                input(f"{YELLOW}{MID}  Press Enter to exit...{RESET}                     {BOT}")
                 return
             
-            link = input(f"{G}{MD}  لینک پست:{X} ")
+            url = input(f"{GREEN}{MID}  Enter post URL:{RESET} ")
             
             try:
-                link = link.replace('https://t.me/', '').replace('t.me/', '')
-                parts = link.split('/')
+                url = url.replace('https://t.me/', '').replace('t.me/', '')
+                parts = url.split('/')
                 if len(parts) >= 2:
                     self.channel = parts[0]
                     self.post_id = parts[1]
                 else:
                     raise
             except:
-                print(f"{R}{MD}  لینک اشتباه است!{X}                     {DN}")
-                print(f"{Y}{MD}  مثال: channel/123{X}                    {DN}")
-                input(f"{Y}{MD}  اینتر را بزنید...{X}                     {DN}")
+                print(f"{RED}{MID}  Invalid URL!{RESET}                           {BOT}")
+                print(f"{YELLOW}{MID}  Example: channel/123{RESET}                    {BOT}")
+                input(f"{YELLOW}{MID}  Press Enter to exit...{RESET}                     {BOT}")
                 return
             
-            print(f"{G}{MD}  کانال: {self.channel} | شماره: {self.post_id}{X}        {DN}")
-            print(f"{Y}{MD}  شروع... Ctrl+C برای توقف{X}                  {DN}")
+            print(f"{GREEN}{MID}  Channel: {self.channel} | Post: {self.post_id}{RESET}           {BOT}")
+            print(f"{YELLOW}{MID}  Starting... Press Ctrl+C to stop{RESET}            {BOT}")
             time.sleep(2)
             
-            threading.Thread(target=self.display, daemon=True).start()
-            threading.Thread(target=self.check_views, daemon=True).start()
+            threading.Thread(target=self.show_stats, daemon=True).start()
+            threading.Thread(target=self.check_current_views, daemon=True).start()
             threading.Thread(target=self.worker, daemon=True).join()
             
         except KeyboardInterrupt:
             self.running = False
-            print(f"\n{Y}{MD}  متوقف شد!{X}                           {DN}")
-            print(f"{G}{MD}  ارسال شده: {self.sent}{X}                    {DN}")
+            print(f"\n{YELLOW}{MID}  Stopped!{RESET}                               {BOT}")
+            print(f"{GREEN}{MID}  Views Sent: {self.views_sent}{RESET}                    {BOT}")
 
 if __name__ == '__main__':
     bot = JoyaView()
