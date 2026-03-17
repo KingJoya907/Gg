@@ -13,11 +13,15 @@ except:
     os.system('pip install requests')
     os.system('pip install configparser')
 
-THREADS = 500
+# ==================== تنظیمات ====================
+THREADS = 200  # کاهش یافته از 500 به 200
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36'
-MAX_CONSECUTIVE_FAILURES = 3
-VIEW_DELAY = 0.5
+MAX_CONSECUTIVE_FAILURES = 5  # افزایش یافته از 3 به 5
+VIEW_DELAY = 1.0  # افزایش یافته از 0.5 به 1.0 ثانیه
+time_out = 30  # افزایش یافته از 15 به 30 ثانیه
+DEBUG_MODE = True  # فعال کردن حالت دیباگ
 
+# ==================== REGEX برای استخراج پروکسی ====================
 REGEX = compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
                 + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
                 + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
@@ -26,7 +30,7 @@ REGEX = compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
                 + r"|65[0-4]\d{2}|655[0-2]\d|6553[0-5])")
                 + r")(?:\D|$)")
 
-# Statistics variables
+# ==================== متغیرهای آمار ====================
 stats_lock = Lock()
 start_time = time()
 total_views_sent = 0
@@ -44,13 +48,33 @@ total_proxies_loaded = 0
 active_proxies_count = 0
 blocked_proxies = 0
 
+# ==================== خواندن فایل تنظیمات ====================
 errors = open('errors.txt', 'a+')
 cfg = ConfigParser(interpolation=None)
-cfg.read("config.ini", encoding="utf-8")
+
+# بررسی وجود فایل config.ini
+config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.ini")
+if not os.path.exists(config_path):
+    print(f" [ ERROR ] config.ini not found at: {config_path}")
+    print(" Creating default config.ini...")
+    
+    with open(config_path, 'w', encoding='utf-8') as f:
+        f.write("""[SOCKS5]
+Sources = 
+    https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/socks5/data.txt
+    https://api.proxyscrape.com/v2/?request=getproxies&protocol=socks5&timeout=4000&anonymity=elite
+    https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks5.txt
+    https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt
+    https://raw.githubusercontent.com/vakhov/fresh-proxy-list/main/socks5.txt
+""")
+    print(" [ ✓ ] Default config.ini created successfully!")
+
+cfg.read(config_path, encoding="utf-8")
 
 # فقط SOCKS5
 try:
     socks5 = cfg["SOCKS5"]
+    print(" [ ✓ ] SOCKS5 section loaded successfully")
 except KeyError:
     print(' [ ERROR ] SOCKS5 section not found in config.ini!')
     print(' Please make sure your config.ini has [SOCKS5] section')
@@ -59,9 +83,10 @@ except KeyError:
 
 socks5_proxies = []
 proxy_queue = Queue()
-channel, post, time_out, real_views = '', 0, 15, 0
+channel, post, real_views = '', 0, '0'
 
 
+# ==================== توابع آمار ====================
 def update_stats(success=True):
     global total_views_sent, successful_views, failed_views, last_view_time, current_view_rate
     
@@ -138,19 +163,23 @@ def print_statistics():
         print("=" * 60)
 
 
+# ==================== توابع پروکسی ====================
 def scrap(sources):
     global socks5_proxies_found, total_proxies_loaded
     
     for source in sources:
         if source and source.strip():
             try:
-                print(f" [*] Scraping: {source[:50]}...")
+                if DEBUG_MODE:
+                    print(f" [*] Scraping: {source[:50]}...")
+                
                 response = requests.get(source.strip(), timeout=time_out)
                 
                 if tuple(REGEX.finditer(response.text)):
                     proxies_found = 0
                     for proxy in tuple(REGEX.finditer(response.text)):
-                        socks5_proxies.append(proxy.group(1))
+                        proxy_str = proxy.group(1)
+                        socks5_proxies.append(proxy_str)
                         proxies_found += 1
                     
                     with stats_lock:
@@ -184,9 +213,13 @@ def start_scrap():
     print(f" [✓] Scrap cycle complete. Total proxies: {len(socks5_proxies)}")
 
 
+# ==================== توابع تلگرام ====================
 def get_token(proxy):
     try:
         session = requests.session()
+        
+        if DEBUG_MODE:
+            print(f" [*] Trying proxy: {proxy}")
 
         response = session.get(
             f'https://t.me/{channel}/{post}',
@@ -202,11 +235,29 @@ def get_token(proxy):
             timeout=time_out)
 
         token = search('data-view="([^"]+)', response.text)
+        
         if token:
+            if DEBUG_MODE:
+                print(f" [✓] Token received from {proxy}")
             return token.group(1), session
-        return None, None
+        else:
+            if DEBUG_MODE:
+                print(f" [✗] No token in response from {proxy}")
+                if len(response.text) < 500:
+                    print(f"     Response: {response.text[:200]}")
+            return None, None
 
+    except requests.exceptions.ConnectTimeout:
+        if DEBUG_MODE:
+            print(f" [✗] Connection timeout: {proxy}")
+        return None, None
+    except requests.exceptions.ProxyError as e:
+        if DEBUG_MODE:
+            print(f" [✗] Proxy error: {proxy} - {e}")
+        return None, None
     except Exception as e:
+        if DEBUG_MODE:
+            print(f" [✗] Other error: {proxy} - {e}")
         return None, None
 
 
@@ -234,9 +285,18 @@ def send_view(token, session, proxy):
             },
             timeout=time_out)
 
-        return response.status_code == 200 and response.text == 'true'
+        success = response.status_code == 200 and response.text == 'true'
+        
+        if DEBUG_MODE and success:
+            print(f" [✓] View sent successfully with {proxy}")
+        elif DEBUG_MODE and not success:
+            print(f" [✗] View failed with {proxy} - Response: {response.text}")
+            
+        return success
 
-    except:
+    except Exception as e:
+        if DEBUG_MODE:
+            print(f" [✗] Send view error: {e}")
         return False
 
 
@@ -255,21 +315,31 @@ def proxy_worker():
             current_token = None
             views_with_this_proxy = 0
             
-            print(f" [✓] Started using proxy: {proxy}")
+            if DEBUG_MODE:
+                print(f" [→] Worker started with proxy: {proxy}")
             
             while consecutive_failures < MAX_CONSECUTIVE_FAILURES:
                 try:
                     if not current_token or not session:
+                        if DEBUG_MODE:
+                            print(f" [*] Getting token for {proxy}")
+                        
                         token_result, new_session = get_token(proxy)
+                        
                         if token_result and new_session:
                             current_token = token_result
                             session = new_session
                             consecutive_failures = 0
+                            if DEBUG_MODE:
+                                print(f" [✓] Token obtained for {proxy}")
                         else:
                             consecutive_failures += 1
+                            if DEBUG_MODE:
+                                print(f" [✗] Failed to get token ({consecutive_failures}/{MAX_CONSECUTIVE_FAILURES})")
                             sleep(1)
                             continue
                     
+                    # Send view
                     success = send_view(current_token, session, proxy)
                     
                     if success:
@@ -278,22 +348,29 @@ def proxy_worker():
                         with stats_lock:
                             update_stats(success=True)
                             socks5_proxies_used += 1
+                        if DEBUG_MODE and views_with_this_proxy % 10 == 0:
+                            print(f" [✓] {views_with_this_proxy} views sent with {proxy}")
                     else:
                         consecutive_failures += 1
                         with stats_lock:
                             update_stats(success=False)
                             proxy_errors += 1
+                        if DEBUG_MODE:
+                            print(f" [✗] View failed ({consecutive_failures}/{MAX_CONSECUTIVE_FAILURES})")
                     
                     sleep(VIEW_DELAY)
                     
                 except Exception as e:
                     consecutive_failures += 1
+                    if DEBUG_MODE:
+                        print(f" [✗] Worker error: {e}")
                     sleep(1)
             
             with stats_lock:
                 active_proxies_count -= 1
                 blocked_proxies += 1
-            print(f" [✗] Proxy blocked after {views_with_this_proxy} views: {proxy}")
+            if DEBUG_MODE:
+                print(f" [⛔] Proxy blocked after {views_with_this_proxy} views: {proxy}")
             
         except:
             sleep(1)
@@ -314,9 +391,13 @@ def start_view():
             sleep(5)
             continue
         
-        while active_count() - 3 < THREADS and proxy_queue.qsize() > 0:
-            Thread(target=proxy_worker, daemon=True).start()
-            sleep(0.1)
+        # ایجاد threadهای جدید
+        threads_to_create = min(THREADS - (active_count() - 3), proxy_queue.qsize())
+        if threads_to_create > 0:
+            print(f" [*] Creating {threads_to_create} new worker threads...")
+            for i in range(threads_to_create):
+                Thread(target=proxy_worker, daemon=True).start()
+                sleep(0.05)
         
         sleep(2)
 
@@ -343,6 +424,7 @@ def check_views():
             pass
 
 
+# ==================== اجرای اصلی ====================
 system('cls' if name == 'nt' else 'clear')
 
 print("=" * 60)
@@ -354,12 +436,14 @@ print(" • SOCKS5 proxies only")
 print(" • Each working proxy sends views until blocked")
 print(f" • Max {MAX_CONSECUTIVE_FAILURES} consecutive failures before discarding")
 print(f" • {VIEW_DELAY}s delay between views")
+print(f" • Debug Mode: {'ON' if DEBUG_MODE else 'OFF'}")
 print(" • Real-time statistics")
 print("=" * 60)
 print()
 url = input(" Enter Telegram View Post URL ==> ").replace('https://t.me/', '')
 if '/' in url:
     channel, post = url.split('/')
+    print(f" [✓] Channel: @{channel}, Post: {post}")
 else:
     print(" [ ERROR ] Invalid URL format!")
     exit()
