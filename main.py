@@ -1,19 +1,19 @@
 import os
-import random
-import json
-from datetime import datetime
 try:
  import requests
- from time import sleep
+ from time import sleep, time
  from configparser import ConfigParser
  from os import system, name
  from threading import Thread, active_count, Lock
  from re import search, compile
  from collections import deque
+ from datetime import datetime
+ import random
+ import json
 except:
  os.system('pip install requests')
  os.system('pip install configparser')
-
+ os.system('pip install datetime')
 # ==================== تنظیمات پیشرفته ====================
 THREADS = 300  # کاهش برای رفتار طبیعی‌تر
 PROXIES_TYPES = ('http', 'socks4', 'socks5')
