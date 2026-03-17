@@ -22,7 +22,7 @@ def log(message):
     print(f"[{timestamp}] {message}")
 
 class Telegram:
-    def __init__(self, channel: str, post: int, concurrency: int = 100) -> None:
+    def __init__(self, channel: str, post: int, concurrency: int = 500) -> None:
         self.channel = channel
         self.post = post
         self.concurrency = concurrency
@@ -34,10 +34,11 @@ class Telegram:
             'proxy_errors': 0,
             'token_errors': 0
         }
+        self.running = True
         log(f"Initialized with channel: @{channel}, post: {post}, concurrency: {concurrency}")
 
     async def print_stats(self):
-        while True:
+        while self.running:
             await asyncio.sleep(1)
             success_rate = (self.stats['success'] / self.stats['total'] * 100) if self.stats['total'] > 0 else 0
             print("\n" + "="*60)
@@ -78,6 +79,7 @@ class Telegram:
                         if not jar.filter_cookies(embed_response.url).get("stel_ssid"):
                             self.stats['token_errors'] += 1
                             self.stats['failed'] += 1
+                            self.stats['total'] += 1
                             return
 
                         views_token = search(
@@ -87,6 +89,7 @@ class Telegram:
                         if not views_token:
                             self.stats['token_errors'] += 1
                             self.stats['failed'] += 1
+                            self.stats['total'] += 1
                             return
 
                         # Send view
@@ -113,38 +116,35 @@ class Telegram:
         except Exception as e:
             self.stats['proxy_errors'] += 1
             self.stats['failed'] += 1
+            self.stats['total'] += 1
 
         finally:
             if 'jar' in locals():
                 jar.clear()
 
-    async def run_proxies_continuous(self, lines: list):
-        log(f"Starting continuous mode with {len(lines)} SOCKS5 proxies")
-        
-        # Start stats printer
-        asyncio.create_task(self.print_stats())
-        
-        while True:
-            tasks = [
-                asyncio.create_task(self.request(proxy))
-                for proxy in lines
-            ]
-            await asyncio.gather(*tasks, return_exceptions=True)
-
-    async def continuous_request(self, proxy: str):
-        while True:
+    async def worker(self, proxy):
+        """هر worker با یک پروکسی کار می‌کنه"""
+        while self.running:
             await self.request(proxy)
+            await asyncio.sleep(0.1)  # کمی تأخیر
 
-    async def run_rotated_continuous(self, proxy: str):
-        log(f"Starting continuous rotated mode with SOCKS5 proxy {proxy}")
+    async def run_proxies_continuous(self, proxies: list):
+        log(f"Starting continuous mode with {len(proxies)} SOCKS5 proxies")
         
-        # Start stats printer
+        # شروع نمایش آمار
         asyncio.create_task(self.print_stats())
         
-        tasks = [
-            asyncio.create_task(self.continuous_request(proxy))
-            for _ in range(self.concurrency * 5)
-        ]
+        # ایجاد worker برای هر پروکسی
+        tasks = []
+        for proxy in proxies[:self.concurrency]:  # به اندازه concurrency پروکسی برمیداریم
+            task = asyncio.create_task(self.worker(proxy))
+            tasks.append(task)
+            if len(tasks) >= self.concurrency:
+                break
+        
+        log(f"Started {len(tasks)} workers")
+        
+        # منتظر موندن
         await asyncio.gather(*tasks, return_exceptions=True)
 
 class Auto:
@@ -165,7 +165,6 @@ class Auto:
         try:
             async with aiohttp.ClientSession() as session:
                 headers = {"user-agent": UserAgent().random}
-                log(f"Scraping SOCKS5 proxies from {source_url}")
                 async with session.get(
                     source_url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)
                 ) as response:
@@ -177,25 +176,21 @@ class Auto:
 
         except Exception as e:
             log(f"ERROR: Failed to scrape from {source_url} - {str(e)[:100]}")
-            with open("error.txt", "a", encoding="utf-8", errors="ignore") as f:
-                f.write(f"{source_url} -> {e}\n")
 
     async def init(self):
         tasks = []
         self.proxies.clear()
-
         tasks.extend([self.scrap(source_url) for source_url in self.socks5_sources])
-
         await asyncio.gather(*tasks)
         log(f"Proxy scraping complete. Total SOCKS5 proxies found: {len(self.proxies)}")
 
 async def main():
     parser = ArgumentParser()
-    parser.add_argument("-c", "--channel", dest="channel", help="Channel without @ (e.g: MyChannel1234)", type=str, required=True)
-    parser.add_argument("-pt", "--post", dest="post", help="Post number (ID) (e.g: 1921)", type=int, required=True)
-    parser.add_argument("-m", "--mode", dest="mode", help="Proxy mode (list | auto | rotate)", type=str, required=True)
-    parser.add_argument("-p", "--proxy", dest="proxy", help="Proxy file path or proxy address (host:port)", type=str, required=False)
-    parser.add_argument("-cc", "--concurrency", dest="concurrency", help="Maximum concurrent requests", type=int, default=200)
+    parser.add_argument("-c", "--channel", dest="channel", help="Channel without @", type=str, required=True)
+    parser.add_argument("-pt", "--post", dest="post", help="Post number", type=int, required=True)
+    parser.add_argument("-m", "--mode", dest="mode", help="Proxy mode (list | auto)", type=str, required=True)
+    parser.add_argument("-p", "--proxy", dest="proxy", help="Proxy file path", type=str, required=False)
+    parser.add_argument("-cc", "--concurrency", dest="concurrency", help="Maximum concurrent requests", type=int, default=500)
     args = parser.parse_args()
     
     log(f"Telegram Views Started - SOCKS5 ONLY - Mode: {args.mode}")
@@ -203,13 +198,9 @@ async def main():
     
     if args.mode[0] == "l":  # list mode
         with open(args.proxy, "r") as file:
-            lines = file.read().splitlines()
-        log(f"Loaded {len(lines)} SOCKS5 proxies from file {args.proxy}")
-        await api.run_proxies_continuous(lines)
-
-    elif args.mode[0] == "r":  # rotate mode
-        log(f"Starting rotated mode with single SOCKS5 proxy: {args.proxy}")
-        await api.run_rotated_continuous(args.proxy)
+            proxies = file.read().splitlines()
+        log(f"Loaded {len(proxies)} SOCKS5 proxies from file {args.proxy}")
+        await api.run_proxies_continuous(proxies)
 
     else:  # auto mode
         auto = Auto()
