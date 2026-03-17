@@ -1,214 +1,201 @@
-import aiohttp
-import asyncio
-import configparser
-import random
-from re import search, compile
-from datetime import datetime
-from aiohttp_socks import ProxyConnector
+import os
+try:
+ import requests
+ from time import sleep
+ from configparser import ConfigParser
+ from os import system, name
+ from threading import Thread, active_count
+ from re import search, compile
+except:
+ os.system('pip install requests')
+ os.system('pip install configparser')
 
-REGEX = compile(
-    r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
-    + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
-    + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
-    + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
-    + r"):" + (r"(?:\d|[1-9]\d{1,3}|[1-5]\d{4}|6[0-4]\d{3}"
-    + r"|65[0-4]\d{2}|655[0-2]\d|6553[0-5])")
-    + r")(?:\D|$)"
-)
+THREADS = 500
+PROXIES_TYPES = ('http', 'socks4', 'socks5')
+USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36'
 
-def log(message):
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+REGEX = compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
+                + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
+                + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
+                + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
+                + r"):" + (r"(?:\d|[1-9]\d{1,3}|[1-5]\d{4}|6[0-4]\d{3}"
+                + r"|65[0-4]\d{2}|655[0-2]\d|6553[0-5])")
+                + r")(?:\D|$)")
 
-def read_config():
-    config = configparser.ConfigParser()
-    config.read('config.ini', encoding='utf-8')
-    try:
-        sources = [s.strip() for s in config['SOCKS5']['Sources'].splitlines() if s.strip()]
-        return sources
-    except:
-        log("ERROR: Failed to read config.ini")
-        exit(1)
+errors = open('errors.txt', 'a+')
+cfg = ConfigParser(interpolation=None)
+cfg.read("config.ini", encoding="utf-8")
 
-class RealBrowserBot:
-    def __init__(self, channel, post, concurrency=50):  # کمتر برای شبیه‌سازی واقعی
-        self.channel = channel
-        self.post = post
-        self.concurrency = concurrency
-        self.semaphore = asyncio.Semaphore(concurrency)
-        self.stats = {'total': 0, 'success': 0}
-        
-    async def send_like_real_browser(self, proxy):
-        """ویو زدن مثل یک کاربر واقعی"""
-        try:
-            async with self.semaphore:
-                # تأخیر رندوم شبیه انسان
-                await asyncio.sleep(random.uniform(1, 3))
-                
-                connector = ProxyConnector.from_url(f"socks5://{proxy}")
-                
-                # Cookie jar مخصوص
-                jar = aiohttp.CookieJar(unsafe=True)
-                
-                # User Agent شبیه مرورگر واقعی
-                ua = random.choice([
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
-                ])
-                
-                async with aiohttp.ClientSession(cookie_jar=jar, connector=connector) as session:
-                    # ===== مرحله ۱: بازدید از صفحه =====
-                    headers1 = {
-                        'User-Agent': ua,
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                        'Accept-Language': 'en-US,en;q=0.5',
-                        'Accept-Encoding': 'gzip, deflate, br',
-                        'Connection': 'keep-alive',
-                        'Upgrade-Insecure-Requests': '1',
-                        'Sec-Fetch-Dest': 'document',
-                        'Sec-Fetch-Mode': 'navigate',
-                        'Sec-Fetch-Site': 'none',
-                        'Sec-Fetch-User': '?1',
-                        'Cache-Control': 'max-age=0',
-                    }
-                    
-                    # بازدید از صفحه اصلی پست
-                    await session.get(
-                        f"https://t.me/{self.channel}/{self.post}",
-                        headers=headers1,
-                        timeout=10
-                    )
-                    
-                    # تأخیر شبیه انسان
-                    await asyncio.sleep(random.uniform(0.5, 1.5))
-                    
-                    # ===== مرحله ۲: درخواست embed =====
-                    headers2 = {
-                        'User-Agent': ua,
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                        'Accept-Language': 'en-US,en;q=0.5',
-                        'Accept-Encoding': 'gzip, deflate, br',
-                        'Connection': 'keep-alive',
-                        'Referer': f'https://t.me/{self.channel}/{self.post}',
-                        'Sec-Fetch-Dest': 'iframe',
-                        'Sec-Fetch-Mode': 'navigate',
-                        'Sec-Fetch-Site': 'same-origin',
-                    }
-                    
-                    async with session.get(
-                        f"https://t.me/{self.channel}/{self.post}?embed=1",
-                        headers=headers2,
-                        timeout=10
-                    ) as resp:
-                        html = await resp.text()
-                        
-                        # پیدا کردن توکن
-                        token_match = search(r'data-view="([^"]+)"', html)
-                        if not token_match:
-                            return
-                        
-                        token = token_match.group(1)
-                        
-                        # تأخیر شبیه انسان
-                        await asyncio.sleep(random.uniform(0.3, 0.8))
-                        
-                        # ===== مرحله ۳: ارسال ویو =====
-                        headers3 = {
-                            'User-Agent': ua,
-                            'Accept': '*/*',
-                            'Accept-Language': 'en-US,en;q=0.5',
-                            'Accept-Encoding': 'gzip, deflate, br',
-                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Origin': 'https://t.me',
-                            'Connection': 'keep-alive',
-                            'Referer': f'https://t.me/{self.channel}/{self.post}?embed=1',
-                            'Sec-Fetch-Dest': 'empty',
-                            'Sec-Fetch-Mode': 'cors',
-                            'Sec-Fetch-Site': 'same-origin',
-                        }
-                        
-                        async with session.post(
-                            "https://t.me/v/",
-                            params={"views": token},
-                            headers=headers3,
-                            timeout=10
-                        ) as view_resp:
-                            
-                            self.stats['total'] += 1
-                            
-                            if view_resp.status == 200:
-                                text = await view_resp.text()
-                                if text == "true":
-                                    self.stats['success'] += 1
-                                    log(f"✅ REAL VIEW! با {proxy}")
-                                    
-                                    # ذخیره پروکسی‌های موفق
-                                    with open('working_proxies.txt', 'a') as f:
-                                        f.write(f"{proxy}\n")
-                            
-                            # تأخیر طولانی بین ویوها
-                            await asyncio.sleep(random.uniform(5, 10))
-                            
-        except Exception as e:
-            pass
-    
-    async def worker(self, proxy):
-        """کارگر با تأخیرهای طولانی"""
-        while True:
-            await self.send_like_real_browser(proxy)
-    
-    async def run(self):
-        # اسکرپ پروکسی
-        sources = read_config()
-        all_proxies = []
-        
-        for source in sources:
+http, socks4, socks5 = '', '', ''
+try:
+ http, socks4, socks5 = cfg["HTTP"], cfg["SOCKS4"], cfg["SOCKS5"]
+except KeyError:
+ print(' [ OUTPUT ] Error | config.ini not found!')
+ sleep(3)
+ exit()
+
+http_proxies, socks4_proxies, socks5_proxies = [], [], []
+proxy_errors, token_errors = 0, 0
+channel, post, time_out, real_views = '', 0, 15, 0
+
+
+def scrap(sources, _proxy_type):
+    for source in sources:
+        if source:
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(source, timeout=10) as resp:
-                        html = await resp.text()
-                        matches = REGEX.finditer(html)
-                        proxies = [m.group(1) for m in matches]
-                        all_proxies.extend(proxies)
-                        log(f"Found {len(proxies)} proxies")
-            except:
-                pass
-        
-        log(f"Total proxies: {len(all_proxies)}")
-        
-        # شروع workerها با concurrency پایین
-        workers = min(self.concurrency, len(all_proxies))
-        tasks = []
-        for i in range(workers):
-            task = asyncio.create_task(self.worker(all_proxies[i]))
-            tasks.append(task)
-        
-        log(f"Started {workers} workers - REAL BROWSER MODE")
-        
-        # نمایش آمار
-        while True:
-            await asyncio.sleep(10)
-            print("\n" + "="*60)
-            print(f" 📊 REAL VIEWS: {self.stats['success']}")
-            print(f" 📈 TOTAL: {self.stats['total']}")
-            print("="*60)
-        
-        await asyncio.gather(*tasks)
+                response = requests.get(source, timeout=time_out)
+            except Exception as e:
+                errors.write(f'{e}\n')
 
-async def main():
-    print("\n" + "="*60)
-    print(" 🌍 REAL BROWSER SIMULATION MODE 🌍".center(60))
-    print("="*60)
-    
-    url = input(" URL: ").replace('https://t.me/', '').strip()
-    channel, post = url.split('/')
-    
-    print("\n [✓] REAL BROWSER MODE - ویو زدن مثل انسان")
-    print(" [⚠️] این روش کندتر ولی واقعی‌تره")
-    
-    bot = RealBrowserBot(channel, int(post), concurrency=20)  # خیلی کمتر
-    await bot.run()
+            if tuple(REGEX.finditer(response.text)):
+                for proxy in tuple(REGEX.finditer(response.text)):
+                    if _proxy_type == 'http':
+                        http_proxies.append(proxy.group(1))
+                    elif _proxy_type == 'socks4':
+                        socks4_proxies.append(proxy.group(1))
+                    elif _proxy_type == 'socks5':
+                        socks5_proxies.append(proxy.group(1))
 
-if __name__ == "__main__":
-    asyncio.run(main())
+
+def start_scrap():
+    threads = []
+    for i in (http_proxies, socks4_proxies, socks5_proxies):
+        i.clear()
+
+    for i in ((http.get("Sources").splitlines(), 'http'),
+              (socks4.get("Sources").splitlines(), 'socks4'),
+              (socks5.get("Sources").splitlines(), 'socks5')):
+
+        thread = Thread(target=scrap, args=(i[0], i[1]))
+        threads.append(thread)
+        thread.start()
+
+    for t in threads:
+        t.join()
+
+
+def get_token(proxy, proxy_type):
+    try:
+        session = requests.session()
+
+        response = session.get(
+            f'https://t.me/{channel}/{post}',
+            params={'embed': '1', 'mode': 'tme'},
+            headers={
+                'referer': f'https://t.me/{channel}/{post}',
+                'user-agent': USER_AGENT
+            },
+            proxies={
+                'http': f'{proxy_type}://{proxy}',
+                'https': f'{proxy_type}://{proxy}'
+            },
+            timeout=time_out)
+
+        return search('data-view="([^"]+)', response.text).group(1), session
+
+    except AttributeError:
+        return 2
+    except requests.exceptions.RequestException:
+        return 1
+    except Exception as e:
+        return errors.write(f'{e}\n')
+
+
+def send_view(token, session, proxy, proxy_type):
+    try:
+        cookies_dict = session.cookies.get_dict()
+
+        response = session.get(
+            'https://t.me/v/',
+            params={'views': str(token)},
+            cookies={
+                'stel_dt': '-240',
+                'stel_web_auth': 'https%3A%2F%2Fweb.telegram.org%2Fz%2F',
+                'stel_ssid': cookies_dict.get('stel_ssid', None),
+                'stel_on': cookies_dict.get('stel_on', None)
+            },
+            headers={
+                'referer': f'https://t.me/{channel}/{post}?embed=1&mode=tme',
+                'user-agent': USER_AGENT,
+                'x-requested-with': 'XMLHttpRequest'
+            },
+            proxies={
+                'http': f'{proxy_type}://{proxy}',
+                'https': f'{proxy_type}://{proxy}'
+            },
+            timeout=time_out)
+
+        return True if (response.status_code == 200 and response.text == 'true') else False
+
+    except requests.exceptions.RequestException:
+        return 1
+    except Exception:
+        pass
+
+
+def control(proxy, proxy_type):
+    global proxy_errors, token_errors
+
+    token_data = get_token(proxy, proxy_type)
+
+    if token_data == 2:
+        token_errors += 1
+    elif token_data == 1:
+        proxy_errors += 1
+    elif token_data:
+        send_data = send_view(token_data[0], token_data[1], proxy, proxy_type)
+        if send_data == 1:
+            proxy_errors += 1
+
+
+def start_view():
+    c, threads = 0, []
+    start_scrap()
+
+    for i in [http_proxies, socks4_proxies, socks5_proxies]:
+        for j in i:
+            thread = Thread(target=control, args=(j, PROXIES_TYPES[c]))
+            threads.append(thread)
+
+            while active_count() > THREADS:
+                sleep(0.05)
+
+            thread.start()
+
+        c += 1
+        sleep(2)
+
+    for t in threads:
+        t.join()
+        start_view()
+
+
+def check_views():
+    global real_views
+
+    while True:
+        try:
+            telegram_request = requests.get(
+                f'https://t.me/{channel}/{post}',
+                params={'embed': '1', 'mode': 'tme'},
+                headers={
+                    'referer': f'https://t.me/{channel}/{post}',
+                    'user-agent': USER_AGENT
+                })
+
+            real_views = search(
+                '<span class="tgme_widget_message_views">([^<]+)',
+                telegram_request.text).group(1)
+
+            sleep(2)
+
+        except:
+            pass
+
+
+system('cls' if name == 'nt' else 'clear')
+
+channel, post = input("TeleGram View Post URL ==> ").replace('https://t.me/', '').split('/')
+
+Thread(target=start_view).start()
+Thread(target=check_views).start()
