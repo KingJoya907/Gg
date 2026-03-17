@@ -13,14 +13,16 @@ except:
     os.system('pip install requests')
     os.system('pip install configparser')
 
-# ==================== تنظیمات بهینه ====================
-THREADS = 100  # کاهش به 100
+# ==================== تنظیمات ====================
+THREADS = 100
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36'
-MAX_CONSECUTIVE_FAILURES = 2  # کاهش به 2 برای تشخیص سریع‌تر پروکسی‌های مرده
-VIEW_DELAY = 2.0  # افزایش به 2 ثانیه
-time_out = 10  # کاهش به 10 ثانیه برای تست سریع‌تر
-PROXY_TEST_TIMEOUT = 5  # تایم‌اوت مخصوص تست پروکسی
+MAX_CONSECUTIVE_FAILURES = 3
+VIEW_DELAY = 2.0
+time_out = 10
+PROXY_TEST_TIMEOUT = 5
 DEBUG_MODE = True
+MAX_TESTERS = 30  # حداکثر تعداد تسترها
+MIN_WORKING_PROXIES = 10  # حداقل پروکسی کارآمد برای شروع ویو
 
 # ==================== REGEX ====================
 REGEX = compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
@@ -50,6 +52,7 @@ total_scrap_cycles = 0
 total_proxies_loaded = 0
 active_proxies_count = 0
 blocked_proxies = 0
+testing_complete = False
 
 # ==================== خواندن config ====================
 errors = open('errors.txt', 'a+')
@@ -81,7 +84,7 @@ except KeyError:
     exit()
 
 socks5_proxies = []
-working_proxies = Queue()  # صف مخصوص پروکسی‌های کارآمد
+working_proxies = Queue()
 proxy_queue = Queue()
 channel, post, real_views = '', 0, '0'
 
@@ -108,6 +111,8 @@ def update_stats(success=True):
 
 
 def print_statistics():
+    global testing_complete
+    
     while True:
         sleep(1)
         system('cls' if name == 'nt' else 'clear')
@@ -119,6 +124,10 @@ def print_statistics():
         
         current_time = time()
         views_in_last_minute = sum(1 for t, _ in views_per_minute if current_time - t <= 60)
+        
+        # بررسی تکمیل تست
+        if socks5_proxies_tested >= total_proxies_loaded and total_proxies_loaded > 0:
+            testing_complete = True
         
         print("=" * 60)
         print("              TELEGRAM VIEW BOT - WITH PROXY TESTER")
@@ -144,15 +153,18 @@ def print_statistics():
         print(f" 🌐 PROXY STATISTICS")
         print(f"    • Scrap Cycles: {total_scrap_cycles}")
         print(f"    • Total Proxies Loaded: {total_proxies_loaded:,}")
-        print(f"    • Proxies Tested: {socks5_proxies_tested:,}")
+        print(f"    • Proxies Tested: {socks5_proxies_tested:,} ({socks5_proxies_tested/total_proxies_loaded*100:.1f}%)")
         print(f"    • Working Proxies: {socks5_proxies_working:,}")
         print(f"    • Active Proxies: {active_proxies_count}")
         print(f"    • Blocked Proxies: {blocked_proxies}")
         print(f"    • Working Queue: {working_proxies.qsize()}")
+        print(f"    • Test Queue: {proxy_queue.qsize()}")
+        print(f"    • Testing Status: {'✅ COMPLETE' if testing_complete else '⏳ IN PROGRESS'}")
         print()
         print(f" 🔧 SYSTEM STATISTICS")
         print(f"    • Active Threads: {active_count()}")
         print(f"    • Max Threads: {THREADS}")
+        print(f"    • Active Testers: {active_count() - (active_proxies_count + 3)}")
         print(f"    • Timeout: {time_out}s")
         print(f"    • View Delay: {VIEW_DELAY}s")
         print()
@@ -165,8 +177,8 @@ def print_statistics():
 def test_proxy(proxy):
     """تست سریع پروکسی قبل از استفاده"""
     try:
-        if DEBUG_MODE:
-            print(f" [*] Testing proxy: {proxy}")
+        if DEBUG_MODE and socks5_proxies_tested % 50 == 0:
+            print(f" [*] Testing proxy {socks5_proxies_tested}/{total_proxies_loaded}: {proxy}")
         
         session = requests.session()
         response = session.get(
@@ -178,35 +190,37 @@ def test_proxy(proxy):
             timeout=PROXY_TEST_TIMEOUT)
         
         if response.status_code == 200:
-            if DEBUG_MODE:
-                print(f" [✓] Proxy working: {proxy}")
+            if DEBUG_MODE and socks5_proxies_working % 10 == 0:
+                print(f" [✓] Found working proxy #{socks5_proxies_working}: {proxy}")
             return True
     except:
-        if DEBUG_MODE:
-            print(f" [✗] Proxy dead: {proxy}")
+        pass
     return False
 
 
 def proxy_tester():
-    """تست همه پروکسی‌ها و اضافه کردن پروکسی‌های کارآمد به صف مخصوص"""
     global socks5_proxies_tested, socks5_proxies_working
     
     while True:
         try:
-            proxy = proxy_queue.get(timeout=5)
-            
-            with stats_lock:
-                socks5_proxies_tested += 1
-            
-            if test_proxy(proxy):
-                working_proxies.put(proxy)
+            if not proxy_queue.empty():
+                proxy = proxy_queue.get(timeout=1)
+                
                 with stats_lock:
-                    socks5_proxies_working += 1
+                    socks5_proxies_tested += 1
+                
+                if test_proxy(proxy):
+                    working_proxies.put(proxy)
+                    with stats_lock:
+                        socks5_proxies_working += 1
+                else:
+                    with stats_lock:
+                        proxy_errors += 1
             else:
-                with stats_lock:
-                    proxy_errors += 1
+                # اگر صف تست خالی بود، کمی صبر کن
+                sleep(1)
             
-        except:
+        except Exception as e:
             sleep(1)
 
 
@@ -381,6 +395,8 @@ def proxy_worker():
 
 
 def start_view():
+    global testing_complete
+    
     while True:
         print(" [*] Starting new scrap cycle...")
         start_scrap()
@@ -391,26 +407,49 @@ def start_view():
         
         print(f" [*] Added {len(socks5_proxies)} proxies to test queue")
         
-        # ایجاد threadهای تستر
-        tester_count = min(50, proxy_queue.qsize())
-        for i in range(tester_count):
+        # ایجاد threadهای تستر (مداوم)
+        for i in range(MAX_TESTERS):
             Thread(target=proxy_tester, daemon=True).start()
+            sleep(0.1)
         
-        # منتظر ماندن برای پیدا شدن پروکسی‌های کارآمد
-        wait_time = 0
-        while working_proxies.qsize() == 0 and wait_time < 60:
-            sleep(5)
-            wait_time += 5
-            print(f" [*] Waiting for working proxies... ({wait_time}s)")
+        print(f" [*] Started {MAX_TESTERS} proxy testers")
         
-        if working_proxies.qsize() > 0:
-            print(f" [✓] Found {working_proxies.qsize()} working proxies!")
+        # منتظر ماندن برای جمع شدن پروکسی‌های کارآمد
+        last_working_count = 0
+        stable_count = 0
+        
+        while not testing_complete:
+            current_working = working_proxies.qsize()
             
-            # ایجاد worker threadها
+            if current_working >= MIN_WORKING_PROXIES:
+                if current_working == last_working_count:
+                    stable_count += 1
+                else:
+                    stable_count = 0
+                
+                # اگر تعداد پروکسی‌های کارآمد پایدار بود و به حد کافی رسید
+                if stable_count >= 5:
+                    print(f" [✓] Found {current_working} stable working proxies! Starting workers...")
+                    break
+            
+            last_working_count = current_working
+            sleep(2)
+        
+        # ایجاد worker threadها
+        if working_proxies.qsize() > 0:
             worker_count = min(THREADS, working_proxies.qsize())
             for i in range(worker_count):
                 Thread(target=proxy_worker, daemon=True).start()
+                sleep(0.1)
+            
+            print(f" [✓] Started {worker_count} workers with {working_proxies.qsize()} proxies")
         
+        # ادامه تست حتی بعد از شروع ویو
+        while proxy_queue.qsize() > 0:
+            sleep(5)
+            print(f" [*] Still testing... {proxy_queue.qsize()} proxies remaining")
+        
+        print(" [✓] All proxies tested!")
         sleep(10)
 
 
@@ -444,10 +483,11 @@ print("      TELEGRAM VIEW BOT - WITH PROXY TESTER")
 print("=" * 60)
 print()
 print(" Features:")
-print(" • Tests proxies before using them")
-print(" • Only uses working proxies")
+print(" • Continuous proxy testing")
+print(" • Starts viewing with MIN_WORKING_PROXIES")
+print(" • Continues testing in background")
 print(f" • Proxy test timeout: {PROXY_TEST_TIMEOUT}s")
-print(f" • Max workers: {THREADS}")
+print(f" • Min working proxies to start: {MIN_WORKING_PROXIES}")
 print("=" * 60)
 print()
 url = input(" Enter Telegram View Post URL ==> ").replace('https://t.me/', '')
@@ -458,7 +498,7 @@ else:
     print(" [ ERROR ] Invalid URL format!")
     exit()
 print()
-print(" Starting bot with proxy tester...")
+print(" Starting bot with continuous proxy testing...")
 print("=" * 60)
 sleep(2)
 
@@ -480,5 +520,6 @@ except KeyboardInterrupt:
     print(f" Total Views Sent: {total_views_sent:,}")
     print(f" Successful Views: {successful_views:,}")
     print(f" Working Proxies Found: {socks5_proxies_working}")
+    print(f" Proxies Tested: {socks5_proxies_tested}/{total_proxies_loaded}")
     print()
     print("=" * 60)
