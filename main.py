@@ -16,14 +16,15 @@ except Exception as e:
 # ==================== تنظیمات ====================
 THREADS = 500
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-MAX_CONSECUTIVE_FAILURES = 3
+MAX_CONSECUTIVE_FAILURES = 5  # افزایش به 5
 VIEW_DELAY = 1.0
-time_out = 15
+time_out = 20  # افزایش به 20 ثانیه
 PROXY_TEST_TIMEOUT = 3
 MAX_TESTERS = 100
-MIN_WORKING_PROXIES = 5  # کاهش به 5 برای شروع سریع‌تر
+MIN_WORKING_PROXIES = 5
 BATCH_SIZE = 50
 DEBUG_MODE = True
+VERBOSE_DEBUG = True  # دیباگ کامل
 
 # ==================== REGEX ====================
 REGEX = compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
@@ -42,6 +43,8 @@ successful_views = 0
 failed_views = 0
 proxy_errors = 0
 token_errors = 0
+token_success = 0
+token_failures = 0
 socks5_proxies_found = 0
 socks5_proxies_used = 0
 socks5_proxies_tested = 0
@@ -56,7 +59,7 @@ blocked_proxies = 0
 workers_started = False
 
 # ==================== خواندن config.ini ====================
-errors = open('errors.txt', 'a+')
+errors = open('errors.txt', 'a+', encoding='utf-8')
 cfg = ConfigParser(interpolation=None)
 
 config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.ini")
@@ -128,6 +131,7 @@ def print_statistics():
         elapsed_str = str(timedelta(seconds=int(elapsed_time)))
         
         success_rate = (successful_views / total_views_sent * 100) if total_views_sent > 0 else 0
+        token_success_rate = (token_success / (token_success + token_failures) * 100) if (token_success + token_failures) > 0 else 0
         
         current_time = time()
         views_in_last_minute = sum(1 for t, _ in views_per_minute if current_time - t <= 60)
@@ -138,7 +142,7 @@ def print_statistics():
         eta = remaining / test_speed if test_speed > 0 else 0
         
         print("="*60)
-        print(" 🚀 TELEGRAM VIEW BOT - FINAL FIX 🚀".center(60))
+        print(" 🚀 TELEGRAM VIEW BOT - DEBUG MODE 🚀".center(60))
         print("="*60)
         print()
         print(f" 📊 TARGET INFORMATION")
@@ -158,6 +162,11 @@ def print_statistics():
         print(f"    • Failed Views: {format_number(failed_views)}")
         print(f"    • Success Rate: {success_rate:.1f}%")
         print(f"    • Workers Started: {'✅' if workers_started else '❌'}")
+        print()
+        print(f" 🎫 TOKEN STATISTICS")
+        print(f"    • Token Success: {token_success}")
+        print(f"    • Token Failures: {token_failures}")
+        print(f"    • Token Success Rate: {token_success_rate:.1f}%")
         print()
         print(f" 🌐 PROXY STATISTICS")
         print(f"    • Scrap Cycles: {total_scrap_cycles}")
@@ -261,7 +270,7 @@ def proxy_tester():
                             socks5_proxies_working += 1
                         if DEBUG_MODE:
                             print(f" [✓] Working: {proxy}")
-                except:
+                except Exception as e:
                     with stats_lock:
                         socks5_proxies_tested += 1
             else:
@@ -270,28 +279,81 @@ def proxy_tester():
             sleep(1)
 
 
-# ==================== توابع تلگرام ====================
+# ==================== توابع تلگرام با دیباگ ====================
 def get_token(proxy):
+    global token_success, token_failures
+    
     try:
+        if VERBOSE_DEBUG:
+            print(f"\n [🔍] Getting token from {proxy}")
+        
         session = requests.session()
         
-        response = session.get(
-            f'https://t.me/{channel}/{post}',
-            params={'embed': '1', 'mode': 'tme'},
-            headers={'referer': f'https://t.me/{channel}/{post}', 'user-agent': USER_AGENT},
-            proxies={'http': f'socks5://{proxy}', 'https': f'socks5://{proxy}'},
-            timeout=time_out)
-
-        token = search('data-view="([^"]+)', response.text)
-        return (token.group(1), session) if token else (None, None)
-    except:
+        url = f'https://t.me/{channel}/{post}'
+        params = {'embed': '1', 'mode': 'tme'}
+        headers = {'referer': f'https://t.me/{channel}/{post}', 'user-agent': USER_AGENT}
+        proxies = {'http': f'socks5://{proxy}', 'https': f'socks5://{proxy}'}
+        
+        if VERBOSE_DEBUG:
+            print(f" [*] URL: {url}")
+            print(f" [*] Timeout: {time_out}s")
+        
+        response = session.get(url, params=params, headers=headers, proxies=proxies, timeout=time_out)
+        
+        if VERBOSE_DEBUG:
+            print(f" [*] Response Status: {response.status_code}")
+            print(f" [*] Response Length: {len(response.text)}")
+        
+        if response.status_code == 200:
+            token = search('data-view="([^"]+)', response.text)
+            
+            if token:
+                if VERBOSE_DEBUG:
+                    print(f" [✓] Token found: {token.group(1)[:20]}...")
+                with stats_lock:
+                    token_success += 1
+                return token.group(1), session
+            else:
+                if VERBOSE_DEBUG:
+                    print(f" [✗] No token in response")
+                    print(f" [*] First 200 chars: {response.text[:200]}")
+                with stats_lock:
+                    token_failures += 1
+                return None, None
+        else:
+            if VERBOSE_DEBUG:
+                print(f" [✗] HTTP Error: {response.status_code}")
+            with stats_lock:
+                token_failures += 1
+            return None, None
+            
+    except requests.exceptions.ConnectTimeout:
+        if VERBOSE_DEBUG:
+            print(f" [✗] Connection Timeout")
+        with stats_lock:
+            token_failures += 1
+        return None, None
+    except requests.exceptions.ProxyError as e:
+        if VERBOSE_DEBUG:
+            print(f" [✗] Proxy Error: {e}")
+        with stats_lock:
+            token_failures += 1
+        return None, None
+    except Exception as e:
+        if VERBOSE_DEBUG:
+            print(f" [✗] Error: {e}")
+        with stats_lock:
+            token_failures += 1
         return None, None
 
 
 def send_view(token, session, proxy):
     try:
+        if VERBOSE_DEBUG:
+            print(f" [*] Sending view with token: {token[:20]}...")
+        
         cookies_dict = session.cookies.get_dict() if session else {}
-
+        
         response = session.get(
             'https://t.me/v/',
             params={'views': str(token)},
@@ -302,27 +364,31 @@ def send_view(token, session, proxy):
             proxies={'http': f'socks5://{proxy}', 'https': f'socks5://{proxy}'},
             timeout=time_out)
 
+        if VERBOSE_DEBUG:
+            print(f" [*] View Response: {response.status_code} - {response.text}")
+        
         return response.status_code == 200 and response.text == 'true'
-    except:
+    except Exception as e:
+        if VERBOSE_DEBUG:
+            print(f" [✗] Send view error: {e}")
         return False
 
 
 # ==================== تابع اصلی ویو زدن ====================
 def view_worker():
-    """کارگر ویو زدن - نسخه نهایی"""
     global active_proxies_count, blocked_proxies, socks5_proxies_used, workers_started
     
     workers_started = True
+    worker_id = id(threading.current_thread())
     
     while True:
         try:
-            # گرفتن پروکسی از صف کارآمد
             proxy = working_proxies.get(timeout=5)
             
             with stats_lock:
                 active_proxies_count += 1
             
-            print(f"\n [🚀] Worker started with proxy: {proxy}")
+            print(f"\n [🚀] Worker-{worker_id} started with proxy: {proxy}")
             print(f" [*] Target: @{channel}/{post}")
             
             consecutive_failures = 0
@@ -332,24 +398,20 @@ def view_worker():
             
             while consecutive_failures < MAX_CONSECUTIVE_FAILURES:
                 try:
-                    # گرفتن توکن در صورت نیاز
                     if not current_token or not session:
-                        print(f" [*] Getting token...")
                         token_result, new_session = get_token(proxy)
                         
                         if token_result and new_session:
                             current_token = token_result
                             session = new_session
                             consecutive_failures = 0
-                            print(f" [✓] Token received")
+                            print(f" [✓] Worker-{worker_id}: Token received")
                         else:
                             consecutive_failures += 1
-                            print(f" [✗] Token failed ({consecutive_failures}/{MAX_CONSECUTIVE_FAILURES})")
+                            print(f" [✗] Worker-{worker_id}: Token failed ({consecutive_failures}/{MAX_CONSECUTIVE_FAILURES})")
                             sleep(1)
                             continue
                     
-                    # ارسال ویو
-                    print(f" [*] Sending view...")
                     success = send_view(current_token, session, proxy)
                     
                     if success:
@@ -359,28 +421,27 @@ def view_worker():
                             update_stats(success=True)
                             socks5_proxies_used += 1
                         
-                        print(f" [✓] View #{total_views_sent} sent! (Total: {total_views_sent})")
+                        print(f" [✓] Worker-{worker_id}: View #{total_views_sent} sent!")
                     else:
                         consecutive_failures += 1
                         with stats_lock:
                             update_stats(success=False)
-                        print(f" [✗] View failed ({consecutive_failures}/{MAX_CONSECUTIVE_FAILURES})")
+                        print(f" [✗] Worker-{worker_id}: View failed ({consecutive_failures}/{MAX_CONSECUTIVE_FAILURES})")
                     
                     sleep(VIEW_DELAY)
                     
                 except Exception as e:
                     consecutive_failures += 1
-                    print(f" [✗] Error: {e}")
+                    print(f" [✗] Worker-{worker_id}: Error: {e}")
                     sleep(1)
             
-            # پروکسی بلاک شد
             with stats_lock:
                 active_proxies_count -= 1
                 blocked_proxies += 1
-            print(f" [⛔] Proxy blocked after {views_with_this_proxy} views")
+            print(f" [⛔] Worker-{worker_id}: Proxy blocked after {views_with_this_proxy} views")
             
         except Exception as e:
-            print(f" [⚠️] Worker error: {e}")
+            print(f" [⚠️] Worker-{worker_id}: Queue error: {e}")
             sleep(1)
 
 
@@ -393,20 +454,16 @@ def start_bot():
         print(" 🚀 Starting New Cycle...")
         print("="*60)
         
-        # اسکرپ پروکسی
         if start_scrap():
-            # اضافه کردن به صف تست
             for proxy in socks5_proxies:
                 proxy_queue.put(proxy)
             print(f" [✓] Added {len(socks5_proxies)} proxies to test queue")
         
-        # ایجاد تسترها
         if active_count() < 50:
             print(f" [✓] Starting {MAX_TESTERS} testers...")
             for i in range(MAX_TESTERS):
                 Thread(target=proxy_tester, daemon=True).start()
         
-        # **بخش حیاتی: شروع ویو زدن**
         if working_proxies.qsize() >= MIN_WORKING_PROXIES and not workers_started:
             workers_count = min(THREADS, working_proxies.qsize())
             print(f"\n [🚀] STARTING {workers_count} VIEW WORKERS!")
@@ -418,7 +475,6 @@ def start_bot():
             workers_started = True
             print(f" [✓] Workers started! Est. rate: {workers_count/VIEW_DELAY:.0f} views/sec")
         
-        # نمایش وضعیت
         print(f"\n [📊] Status:")
         print(f"    • Tested: {socks5_proxies_tested}/{total_proxies_loaded}")
         print(f"    • Working: {socks5_proxies_working}")
@@ -445,7 +501,7 @@ def check_views():
 system('cls' if name == 'nt' else 'clear')
 
 print("\n" + "="*60)
-print(" 🚀 TELEGRAM VIEW BOT - FINAL WORKING VERSION 🚀".center(60))
+print(" 🚀 TELEGRAM VIEW BOT - DEBUG MODE 🚀".center(60))
 print("="*60)
 print()
 url = input(" Enter URL: ").replace('https://t.me/', '').strip()
@@ -458,7 +514,7 @@ else:
     exit()
 
 print("\n" + "="*60)
-print(" 🚀 Starting...")
+print(" 🚀 Starting with DEBUG MODE...")
 print("="*60 + "\n")
 
 Thread(target=start_bot, daemon=True).start()
@@ -473,6 +529,8 @@ except KeyboardInterrupt:
     print(" 📊 FINAL STATISTICS".center(60))
     print("="*60)
     print(f"\n Views Sent: {format_number(total_views_sent)}")
-    print(f" Success Rate: {(successful_views/total_views_sent*100) if total_views_sent>0 else 0:.1f}%")
+    print(f" Token Success: {token_success}")
+    print(f" Token Failures: {token_failures}")
+    print(f" Success Rate: {(token_success/(token_success+token_failures)*100) if (token_success+token_failures)>0 else 0:.1f}%")
     print(f" Working Proxies: {socks5_proxies_working}")
     print("\n" + "="*60)
