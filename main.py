@@ -28,9 +28,8 @@ def read_config():
     
     try:
         socks5_sources = config['SOCKS5']['Sources'].splitlines()
-        # Remove empty lines and strip whitespace
         sources = [s.strip() for s in socks5_sources if s.strip()]
-        log(f"Loaded {len(sources)} proxy sources from config.ini")
+        log(f"Loaded {len(sources)} proxy sources")
         return sources
     except Exception as e:
         log(f"ERROR: Failed to read config.ini - {str(e)}")
@@ -45,76 +44,34 @@ class ProxyScraper:
     async def scrape_source(self, source_url):
         try:
             async with aiohttp.ClientSession() as session:
-                headers = {"user-agent": UserAgent().random}
-                async with session.get(
-                    source_url, 
-                    headers=headers, 
-                    timeout=aiohttp.ClientTimeout(total=15)
-                ) as response:
+                async with session.get(source_url, timeout=15) as response:
                     html = await response.text()
                     matches = REGEX.finditer(html)
                     found_proxies = [match.group(1) for match in matches]
                     self.proxies.extend(found_proxies)
-                    log(f"Found {len(found_proxies)} proxies from {source_url[:50]}...")
+                    log(f"Found {len(found_proxies)} proxies from {source_url[:40]}...")
         except Exception as e:
-            log(f"Failed to scrape {source_url[:50]}... - {str(e)[:50]}")
+            log(f"Failed to scrape {source_url[:40]}...")
     
     async def scrape_all(self):
-        log("Starting proxy scraping from config.ini sources...")
+        log("Scraping proxies...")
         tasks = [self.scrape_source(source) for source in self.sources]
         await asyncio.gather(*tasks)
-        log(f"Scraping complete! Total proxies: {len(self.proxies)}")
+        log(f"Total proxies: {len(self.proxies)}")
         return self.proxies
 
 # ==================== Telegram View Bot ====================
 class TelegramViewBot:
-    def __init__(self, channel: str, post: int, concurrency: int = 500):
+    def __init__(self, channel: str, post: int, concurrency: int = 1000):
         self.channel = channel
         self.post = post
         self.concurrency = concurrency
         self.semaphore = asyncio.Semaphore(concurrency)
-        self.stats = {
-            'total': 0,
-            'success': 0,
-            'failed': 0,
-            'proxy_errors': 0,
-            'token_errors': 0
-        }
+        self.stats = {'total': 0, 'success': 0, 'failed': 0}
         self.running = True
-        self.working_proxies = []  # Will store tested working proxies
         
-    async def test_proxy(self, proxy):
-        """Test if proxy is working"""
-        try:
-            connector = ProxyConnector.from_url(f"socks5://{proxy}")
-            async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.get(
-                    "http://httpbin.org/ip",
-                    timeout=aiohttp.ClientTimeout(total=5)
-                ) as response:
-                    return response.status == 200
-        except:
-            return False
-    
-    async def filter_working_proxies(self, proxies):
-        """Test and filter working proxies"""
-        log(f"Testing {len(proxies)} proxies (this may take a while)...")
-        
-        working = []
-        tested = 0
-        
-        for proxy in proxies[:1000]:  # Test first 1000 proxies
-            if await self.test_proxy(proxy):
-                working.append(proxy)
-            tested += 1
-            if tested % 100 == 0:
-                log(f"Tested {tested}/{min(1000, len(proxies))} proxies - Found {len(working)} working")
-        
-        log(f"Proxy testing complete! Found {len(working)} working proxies")
-        return working
-    
     async def send_view(self, proxy: str):
-        """Send a single view using proxy"""
+        """Send view with proxy - اگر کار کرد ثبت میشه"""
         try:
             async with self.semaphore:
                 connector = ProxyConnector.from_url(f"socks5://{proxy}")
@@ -130,19 +87,10 @@ class TelegramViewBot:
                         timeout=aiohttp.ClientTimeout(total=10),
                     ) as embed_response:
                         
-                        if not jar.filter_cookies(embed_response.url).get("stel_ssid"):
-                            self.stats['token_errors'] += 1
-                            self.stats['total'] += 1
-                            self.stats['failed'] += 1
-                            return
-                        
                         html = await embed_response.text()
                         views_token = search('data-view="([^"]+)"', html)
                         
                         if not views_token:
-                            self.stats['token_errors'] += 1
-                            self.stats['total'] += 1
-                            self.stats['failed'] += 1
                             return
                         
                         # Send view
@@ -160,102 +108,79 @@ class TelegramViewBot:
                             
                             if view_response.status == 200 and await view_response.text() == "true":
                                 self.stats['success'] += 1
+                                log(f"✅ View #{self.stats['success']} sent with {proxy}")
                             else:
                                 self.stats['failed'] += 1
                                 
         except Exception:
-            self.stats['proxy_errors'] += 1
-            self.stats['total'] += 1
             self.stats['failed'] += 1
+            self.stats['total'] += 1
     
     async def worker(self, proxy):
-        """Continuous worker for a single proxy"""
+        """هر پروکسی تا وقتی کار میکنه ویو میزنه"""
+        views = 0
         while self.running:
-            await self.send_view(proxy)
-            await asyncio.sleep(0.5)  # Delay between views
+            try:
+                await self.send_view(proxy)
+                views += 1
+                if views % 10 == 0:
+                    log(f"Proxy {proxy} sent {views} views")
+                await asyncio.sleep(0.5)
+            except:
+                break
+        log(f"Proxy {proxy} stopped after {views} views")
     
     async def print_stats(self):
-        """Print statistics every second"""
+        """آمار لحظه‌ای"""
         while self.running:
-            await asyncio.sleep(1)
-            success_rate = (self.stats['success'] / self.stats['total'] * 100) if self.stats['total'] > 0 else 0
-            
+            await asyncio.sleep(2)
+            rate = (self.stats['success'] / self.stats['total'] * 100) if self.stats['total'] > 0 else 0
             print("\n" + "="*60)
-            print(" 🚀 TELEGRAM VIEW BOT - SOCKS5 ONLY 🚀".center(60))
-            print("="*60)
-            print(f"\n 📊 TARGET: @{self.channel}/{self.post}")
-            print(f"\n 📈 STATISTICS:")
-            print(f"    • Total Views: {self.stats['total']:,}")
-            print(f"    • Successful: {self.stats['success']:,}")
-            print(f"    • Failed: {self.stats['failed']:,}")
-            print(f"    • Success Rate: {success_rate:.1f}%")
-            print(f"    • Proxy Errors: {self.stats['proxy_errors']}")
-            print(f"    • Token Errors: {self.stats['token_errors']}")
-            print(f"\n 🔧 SYSTEM:")
-            print(f"    • Concurrency: {self.concurrency}")
-            print(f"    • Working Proxies: {len(self.working_proxies)}")
+            print(f" 📊 Views: {self.stats['total']} | ✅ {self.stats['success']} | ❌ {self.stats['failed']} | {rate:.1f}%")
             print("="*60)
     
     async def run(self):
-        """Main run function"""
-        # Scrape proxies from config.ini sources
+        """اجرای اصلی - مستقیم میره سراغ ویو زدن"""
+        # اسکرپ پروکسی
         scraper = ProxyScraper()
         all_proxies = await scraper.scrape_all()
         
         if not all_proxies:
-            log("No proxies found! Exiting...")
+            log("No proxies found!")
             return
         
-        # Test and filter working proxies
-        self.working_proxies = await self.filter_working_proxies(all_proxies)
+        log(f"Starting direct view sending with {len(all_proxies)} proxies...")
         
-        if not self.working_proxies:
-            log("No working proxies found! Exiting...")
-            return
-        
-        # Start statistics printer
+        # شروع آمار
         asyncio.create_task(self.print_stats())
         
-        # Start workers with working proxies
-        workers_count = min(self.concurrency, len(self.working_proxies))
-        log(f"Starting {workers_count} workers with working proxies...")
-        
+        # شروع workerها - بدون تست، مستقیم ویو
+        workers_count = min(self.concurrency, len(all_proxies))
         tasks = []
-        for proxy in self.working_proxies[:workers_count]:
+        
+        for i in range(workers_count):
+            proxy = all_proxies[i % len(all_proxies)]
             task = asyncio.create_task(self.worker(proxy))
             tasks.append(task)
         
-        # Wait for all workers
+        log(f"Started {workers_count} workers - هر کی کار کنه ویو میزنه")
         await asyncio.gather(*tasks, return_exceptions=True)
 
 # ==================== Main ====================
 async def main():
     print("\n" + "="*60)
-    print(" 🚀 TELEGRAM VIEW BOT - CONFIG.INI ONLY 🚀".center(60))
+    print(" 🚀 TELEGRAM VIEW BOT - DIRECT MODE 🚀".center(60))
     print("="*60)
-    print()
     
-    # Get target info
-    url = input(" Enter Telegram View Post URL: ").replace('https://t.me/', '').strip()
-    if '/' not in url:
-        print("\n [❌] Invalid URL!")
-        return
-    
+    url = input(" Enter URL: ").replace('https://t.me/', '').strip()
     channel, post = url.split('/')
-    print(f"\n [✓] Channel: @{channel}")
-    print(f" [✓] Post ID: {post}")
     
-    # Get concurrency
-    try:
-        cc = int(input("\n Enter concurrency (default 500): ") or "500")
-    except:
-        cc = 500
+    cc = int(input(" Concurrency (default 1000): ") or "1000")
     
     print("\n" + "="*60)
-    print(" 🚀 Starting bot...")
+    print(" 🚀 Starting - بدون تست، مستقیم ویو...")
     print("="*60 + "\n")
     
-    # Create and run bot
     bot = TelegramViewBot(channel, int(post), cc)
     await bot.run()
 
@@ -263,6 +188,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n\n [👋] Bot stopped by user")
-    except Exception as e:
-        print(f"\n [❌] Error: {str(e)}")
+        print("\n\n [👋] Bot stopped")
