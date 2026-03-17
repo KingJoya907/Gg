@@ -1,360 +1,232 @@
-import os
-try:
-    import requests
-    from time import sleep, time
-    from configparser import ConfigParser
-    from os import system, name
-    from threading import Thread, active_count, Lock
-    from re import search, compile
-    from datetime import datetime, timedelta
-    from collections import deque
-except:
-    os.system('pip install requests')
-    os.system('pip install configparser')
+import aiohttp
+import asyncio
+from re import search, compile
+from argparse import ArgumentParser
+from datetime import datetime
+from fake_useragent import UserAgent
+from aiohttp_socks import ProxyConnector
 
-# ==================== تنظیمات ====================
-THREADS = 500
-USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36'
-MAX_CONSECUTIVE_FAILURES = 3
-VIEW_DELAY = 1.0
-time_out = 15
+# Regular expression for matching proxy patterns
+REGEX = compile(
+    r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
+    + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
+    + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
+    + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
+    + r"):" + (r"(?:\d|[1-9]\d{1,3}|[1-5]\d{4}|6[0-4]\d{3}"
+    + r"|65[0-4]\d{2}|655[0-2]\d|6553[0-5])")
+    + r")(?:\D|$)"
+)
 
-# ==================== REGEX ====================
-REGEX = compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
-                + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
-                + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
-                + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
-                + r"):" + (r"(?:\d|[1-9]\d{1,3}|[1-5]\d{4}|6[0-4]\d{3}"
-                + r"|65[0-4]\d{2}|655[0-2]\d|6553[0-5])")
-                + r")(?:\D|$)")
+def log(message):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    print(f"[{timestamp}] {message}")
 
-# ==================== متغیرهای آمار ====================
-stats_lock = Lock()
-start_time = time()
-total_views_sent = 0
-successful_views = 0
-failed_views = 0
-proxy_errors = 0
-token_errors = 0
-socks5_proxies_found = 0
-socks5_proxies_used = 0
-views_per_minute = deque(maxlen=60)
-last_view_time = time()
-current_view_rate = 0
-total_scrap_cycles = 0
+class Telegram:
+    def __init__(self, channel: str, post: int, concurrency: int = 100) -> None:
+        self.channel = channel
+        self.post = post
+        self.concurrency = concurrency
+        self.semaphore = asyncio.Semaphore(concurrency)
+        self.stats = {
+            'total': 0,
+            'success': 0,
+            'failed': 0,
+            'proxy_errors': 0,
+            'token_errors': 0
+        }
+        log(f"Initialized with channel: @{channel}, post: {post}, concurrency: {concurrency}")
 
-# ==================== خواندن config.ini ====================
-errors = open('errors.txt', 'a+')
-cfg = ConfigParser(interpolation=None)
-cfg.read("config.ini", encoding="utf-8")
+    async def print_stats(self):
+        while True:
+            await asyncio.sleep(1)
+            success_rate = (self.stats['success'] / self.stats['total'] * 100) if self.stats['total'] > 0 else 0
+            print("\n" + "="*60)
+            print(" 🚀 TELEGRAM VIEW BOT - SOCKS5 ONLY 🚀".center(60))
+            print("="*60)
+            print(f"\n 📊 TARGET: @{self.channel}/{self.post}")
+            print(f"\n 📈 STATISTICS:")
+            print(f"    • Total Views: {self.stats['total']:,}")
+            print(f"    • Successful: {self.stats['success']:,}")
+            print(f"    • Failed: {self.stats['failed']:,}")
+            print(f"    • Success Rate: {success_rate:.1f}%")
+            print(f"    • Proxy Errors: {self.stats['proxy_errors']}")
+            print(f"    • Token Errors: {self.stats['token_errors']}")
+            print(f"\n 🔧 SYSTEM:")
+            print(f"    • Concurrency: {self.concurrency}")
+            print("="*60)
 
-try:
-    socks5 = cfg["SOCKS5"]
-    print(" [✓] SOCKS5 section loaded")
-except KeyError:
-    print(' [ ERROR ] SOCKS5 section not found in config.ini!')
-    sleep(3)
-    exit()
-
-socks5_proxies = []
-channel, post, real_views = '', 0, '0'
-
-
-# ==================== توابع آمار ====================
-def update_stats(success=True):
-    global total_views_sent, successful_views, failed_views, last_view_time, current_view_rate
-    
-    with stats_lock:
-        total_views_sent += 1
-        if success:
-            successful_views += 1
-        else:
-            failed_views += 1
-        
-        current_time = time()
-        time_diff = current_time - last_view_time
-        if time_diff > 0:
-            instant_rate = 1 / time_diff
-            current_view_rate = (current_view_rate * 0.7) + (instant_rate * 0.3)
-        
-        views_per_minute.append((current_time, 1))
-        last_view_time = current_time
-
-
-def format_number(num):
-    return f"{num:,}"
-
-
-def print_statistics():
-    while True:
-        sleep(1)
-        system('cls' if name == 'nt' else 'clear')
-        
-        elapsed_time = time() - start_time
-        elapsed_str = str(timedelta(seconds=int(elapsed_time)))
-        
-        success_rate = (successful_views / total_views_sent * 100) if total_views_sent > 0 else 0
-        
-        # رفع خطای deque
-        with stats_lock:
-            views_copy = list(views_per_minute)
-        
-        current_time = time()
-        views_in_last_minute = sum(1 for t, _ in views_copy if current_time - t <= 60)
-        
-        print("="*60)
-        print(" 🚀 TELEGRAM VIEW BOT - SOCKS5 ONLY 🚀".center(60))
-        print("="*60)
-        print()
-        print(f" 📊 TARGET INFORMATION")
-        print(f"    • Channel: @{channel}")
-        print(f"    • Post ID: {post}")
-        print(f"    • Current Views: {real_views}")
-        print()
-        print(f" ⏱️  TIME STATISTICS")
-        print(f"    • Started: {datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"    • Elapsed: {elapsed_str}")
-        print(f"    • Current Rate: {current_view_rate:.1f} views/sec")
-        print(f"    • Views/Minute: {views_in_last_minute}")
-        print()
-        print(f" 📈 VIEW STATISTICS")
-        print(f"    • Total Views Sent: {format_number(total_views_sent)}")
-        print(f"    • Successful Views: {format_number(successful_views)}")
-        print(f"    • Failed Views: {format_number(failed_views)}")
-        print(f"    • Success Rate: {success_rate:.1f}%")
-        print()
-        print(f" 🌐 PROXY STATISTICS")
-        print(f"    • Scrap Cycles: {total_scrap_cycles}")
-        print(f"    • Total Proxies Loaded: {format_number(socks5_proxies_found)}")
-        print(f"    • Proxy Errors: {proxy_errors}")
-        print(f"    • Token Errors: {token_errors}")
-        print()
-        print(f" 🔧 SYSTEM STATISTICS")
-        print(f"    • Active Threads: {active_count()}")
-        print(f"    • Max Threads: {THREADS}")
-        print(f"    • Timeout: {time_out}s")
-        print()
-        print("="*60)
-        print("           Press Ctrl+C to stop the bot".center(60))
-        print("="*60)
-
-
-# ==================== توابع اصلی ====================
-def scrap(sources):
-    global socks5_proxies_found, socks5_proxies
-    
-    for source in sources:
-        if source and source.strip():
-            try:
-                response = requests.get(source.strip(), timeout=time_out)
-                
-                if response.status_code == 200:
-                    matches = tuple(REGEX.finditer(response.text))
-                    if matches:
-                        for proxy in matches:
-                            proxy_str = proxy.group(1)
-                            socks5_proxies.append(proxy_str)
-                            socks5_proxies_found += 1
-                        print(f" [✓] Found {len(matches)} proxies")
-                    else:
-                        print(f" [✗] No proxies found")
-            except Exception as e:
-                errors.write(f'{e}\n')
-
-
-def start_scrap():
-    global total_scrap_cycles, socks5_proxies
-    
-    socks5_proxies = []
-    sources_list = [s for s in socks5.get("Sources").splitlines() if s.strip()]
-    
-    print(f"\n [*] Scraping {len(sources_list)} sources...")
-    
-    threads = []
-    for source in sources_list:
-        thread = Thread(target=scrap, args=([source],))
-        thread.start()
-        threads.append(thread)
-    
-    for t in threads:
-        t.join()
-    
-    with stats_lock:
-        total_scrap_cycles += 1
-    
-    print(f" [✓] Found {len(socks5_proxies)} total proxies")
-    return len(socks5_proxies) > 0
-
-
-def get_token(proxy):
-    try:
-        session = requests.session()
-        
-        response = session.get(
-            f'https://t.me/{channel}/{post}',
-            params={'embed': '1', 'mode': 'tme'},
-            headers={
-                'referer': f'https://t.me/{channel}/{post}',
-                'user-agent': USER_AGENT
-            },
-            proxies={
-                'http': f'socks5://{proxy}',
-                'https': f'socks5://{proxy}'
-            },
-            timeout=time_out)
-        
-        token = search('data-view="([^"]+)', response.text)
-        if token:
-            return token.group(1), session
-        return 2, None  # AttributeError
-    except requests.exceptions.RequestException:
-        return 1, None  # Proxy error
-    except Exception as e:
-        errors.write(f'{e}\n')
-        return None, None
-
-
-def send_view(token, session, proxy):
-    try:
-        cookies_dict = session.cookies.get_dict()
-        
-        response = session.get(
-            'https://t.me/v/',
-            params={'views': str(token)},
-            cookies={
-                'stel_dt': '-240',
-                'stel_web_auth': 'https%3A%2F%2Fweb.telegram.org%2Fz%2F',
-                'stel_ssid': cookies_dict.get('stel_ssid', None),
-                'stel_on': cookies_dict.get('stel_on', None)
-            },
-            headers={
-                'referer': f'https://t.me/{channel}/{post}?embed=1&mode=tme',
-                'user-agent': USER_AGENT,
-                'x-requested-with': 'XMLHttpRequest'
-            },
-            proxies={
-                'http': f'socks5://{proxy}',
-                'https': f'socks5://{proxy}'
-            },
-            timeout=time_out)
-        
-        return response.status_code == 200 and response.text == 'true'
-    except:
-        return False
-
-
-def control(proxy):
-    global proxy_errors, token_errors
-    
-    token_data, session = get_token(proxy)
-    
-    if token_data == 2:
-        with stats_lock:
-            token_errors += 1
-            update_stats(success=False)
-    elif token_data == 1:
-        with stats_lock:
-            proxy_errors += 1
-            update_stats(success=False)
-    elif token_data:
-        success = send_view(token_data, session, proxy)
-        if success:
-            with stats_lock:
-                update_stats(success=True)
-        else:
-            with stats_lock:
-                proxy_errors += 1
-                update_stats(success=False)
-
-
-def start_view():
-    while True:
-        print("\n" + "="*60)
-        print(" 🚀 Starting New Cycle...")
-        print("="*60)
-        
-        # اسکرپ پروکسی
-        if not start_scrap():
-            print(" [⚠️] No proxies found! Waiting...")
-            sleep(10)
-            continue
-        
-        # شروع threadها برای ویو زدن
-        threads = []
-        for proxy in socks5_proxies:
-            thread = Thread(target=control, args=(proxy,))
-            threads.append(thread)
-            
-            while active_count() > THREADS:
-                sleep(0.05)
-            
-            thread.start()
-        
-        # منتظر ماندن برای اتمام
-        for t in threads:
-            t.join()
-        
-        print(f" [✓] Cycle complete! Views sent: {total_views_sent}")
-        sleep(2)
-
-
-def check_views():
-    global real_views
-    
-    while True:
+    async def request(self, proxy: str):
+        proxy_url = f"socks5://{proxy}"
         try:
-            response = requests.get(
-                f'https://t.me/{channel}/{post}',
-                params={'embed': '1', 'mode': 'tme'},
-                headers={
-                    'referer': f'https://t.me/{channel}/{post}',
-                    'user-agent': USER_AGENT
-                })
+            async with self.semaphore:
+                connector = ProxyConnector.from_url(proxy_url)
+                jar = aiohttp.CookieJar(unsafe=True)
+                async with aiohttp.ClientSession(cookie_jar=jar, connector=connector) as session:
+                    user_agent = UserAgent().random
+                    headers = {
+                        "referer": f"https://t.me/{self.channel}/{self.post}",
+                        "user-agent": user_agent,
+                    }
+                    
+                    # Get token
+                    async with session.get(
+                        f"https://t.me/{self.channel}/{self.post}?embed=1&mode=tme",
+                        headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as embed_response:
+
+                        if not jar.filter_cookies(embed_response.url).get("stel_ssid"):
+                            self.stats['token_errors'] += 1
+                            self.stats['failed'] += 1
+                            return
+
+                        views_token = search(
+                            'data-view="([^"]+)"', await embed_response.text()
+                        )
+
+                        if not views_token:
+                            self.stats['token_errors'] += 1
+                            self.stats['failed'] += 1
+                            return
+
+                        # Send view
+                        views_response = await session.post(
+                            "https://t.me/v/?views=" + views_token.group(1),
+                            headers={
+                                "referer": f"https://t.me/{self.channel}/{self.post}?embed=1&mode=tme",
+                                "user-agent": user_agent,
+                                "x-requested-with": "XMLHttpRequest",
+                            },
+                            timeout=aiohttp.ClientTimeout(total=10),
+                        )
+
+                        self.stats['total'] += 1
+                        
+                        if (
+                            await views_response.text() == "true"
+                            and views_response.status == 200
+                        ):
+                            self.stats['success'] += 1
+                        else:
+                            self.stats['failed'] += 1
+
+        except Exception as e:
+            self.stats['proxy_errors'] += 1
+            self.stats['failed'] += 1
+
+        finally:
+            if 'jar' in locals():
+                jar.clear()
+
+    async def run_proxies_continuous(self, lines: list):
+        log(f"Starting continuous mode with {len(lines)} SOCKS5 proxies")
+        
+        # Start stats printer
+        asyncio.create_task(self.print_stats())
+        
+        while True:
+            tasks = [
+                asyncio.create_task(self.request(proxy))
+                for proxy in lines
+            ]
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def continuous_request(self, proxy: str):
+        while True:
+            await self.request(proxy)
+
+    async def run_rotated_continuous(self, proxy: str):
+        log(f"Starting continuous rotated mode with SOCKS5 proxy {proxy}")
+        
+        # Start stats printer
+        asyncio.create_task(self.print_stats())
+        
+        tasks = [
+            asyncio.create_task(self.continuous_request(proxy))
+            for _ in range(self.concurrency * 5)
+        ]
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+class Auto:
+    def __init__(self):
+        self.proxies = []
+        try:
+            with open("auto/socks5.txt", "r") as file:
+                self.socks5_sources = file.read().splitlines()
+                log(f"Loaded {len(self.socks5_sources)} SOCKS5 proxy sources")
+                
+        except FileNotFoundError as e:
+            log(f"ERROR: auto/socks5.txt not found - {str(e)}")
+            exit(0)
+        
+        log("Starting SOCKS5 proxy scraping from sources...")
+
+    async def scrap(self, source_url):
+        try:
+            async with aiohttp.ClientSession() as session:
+                headers = {"user-agent": UserAgent().random}
+                log(f"Scraping SOCKS5 proxies from {source_url}")
+                async with session.get(
+                    source_url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)
+                ) as response:
+                    html = await response.text()
+                    matches = REGEX.finditer(html)
+                    found_proxies = [match.group(1) for match in matches]
+                    self.proxies.extend(found_proxies)
+                    log(f"Found {len(found_proxies)} SOCKS5 proxies from {source_url}")
+
+        except Exception as e:
+            log(f"ERROR: Failed to scrape from {source_url} - {str(e)[:100]}")
+            with open("error.txt", "a", encoding="utf-8", errors="ignore") as f:
+                f.write(f"{source_url} -> {e}\n")
+
+    async def init(self):
+        tasks = []
+        self.proxies.clear()
+
+        tasks.extend([self.scrap(source_url) for source_url in self.socks5_sources])
+
+        await asyncio.gather(*tasks)
+        log(f"Proxy scraping complete. Total SOCKS5 proxies found: {len(self.proxies)}")
+
+async def main():
+    parser = ArgumentParser()
+    parser.add_argument("-c", "--channel", dest="channel", help="Channel without @ (e.g: MyChannel1234)", type=str, required=True)
+    parser.add_argument("-pt", "--post", dest="post", help="Post number (ID) (e.g: 1921)", type=int, required=True)
+    parser.add_argument("-m", "--mode", dest="mode", help="Proxy mode (list | auto | rotate)", type=str, required=True)
+    parser.add_argument("-p", "--proxy", dest="proxy", help="Proxy file path or proxy address (host:port)", type=str, required=False)
+    parser.add_argument("-cc", "--concurrency", dest="concurrency", help="Maximum concurrent requests", type=int, default=200)
+    args = parser.parse_args()
+    
+    log(f"Telegram Views Started - SOCKS5 ONLY - Mode: {args.mode}")
+    api = Telegram(args.channel, args.post, args.concurrency)
+    
+    if args.mode[0] == "l":  # list mode
+        with open(args.proxy, "r") as file:
+            lines = file.read().splitlines()
+        log(f"Loaded {len(lines)} SOCKS5 proxies from file {args.proxy}")
+        await api.run_proxies_continuous(lines)
+
+    elif args.mode[0] == "r":  # rotate mode
+        log(f"Starting rotated mode with single SOCKS5 proxy: {args.proxy}")
+        await api.run_rotated_continuous(args.proxy)
+
+    else:  # auto mode
+        auto = Auto()
+        await auto.init()
+        
+        if not auto.proxies:
+            log("No SOCKS5 proxies found, exiting...")
+            return
             
-            views = search('<span class="tgme_widget_message_views">([^<]+)', response.text)
-            if views:
-                real_views = views.group(1)
-            
-            sleep(2)
-        except:
-            pass
+        log(f"Auto scraping complete. Found {len(auto.proxies)} SOCKS5 proxies")
+        await api.run_proxies_continuous(auto.proxies)
 
-
-# ==================== اجرا ====================
-system('cls' if name == 'nt' else 'clear')
-
-print("\n" + "="*60)
-print(" 🚀 TELEGRAM VIEW BOT - SOCKS5 ONLY 🚀".center(60))
-print("="*60)
-print()
-
-url = input(" Enter Telegram View Post URL ==> ").replace('https://t.me/', '').strip()
-if '/' in url:
-    channel, post = url.split('/')
-    print(f"\n [✓] Channel: @{channel}")
-    print(f" [✓] Post ID: {post}")
-else:
-    print("\n [❌] Invalid URL!")
-    exit()
-
-print("\n" + "="*60)
-print(" 🚀 Starting Bot...")
-print("="*60 + "\n")
-
-# شروع threadها
-Thread(target=start_view, daemon=True).start()
-Thread(target=check_views, daemon=True).start()
-Thread(target=print_statistics, daemon=True).start()
-
-try:
-    while True:
-        sleep(1)
-except KeyboardInterrupt:
-    print("\n" + "="*60)
-    print(" 📊 FINAL STATISTICS".center(60))
-    print("="*60)
-    print(f"\n Total Views Sent: {format_number(total_views_sent)}")
-    print(f" Successful Views: {format_number(successful_views)}")
-    print(f" Success Rate: {(successful_views/total_views_sent*100) if total_views_sent>0 else 0:.1f}%")
-    print(f" Proxies Found: {format_number(socks5_proxies_found)}")
-    print("\n" + "="*60)
+if __name__ == "__main__":
+    log("Program started - SOCKS5 ONLY EDITION")
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        log("\nProgram terminated by user")
+    except Exception as e:
+        log(f"Unhandled exception: {str(e)}")
