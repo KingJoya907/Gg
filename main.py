@@ -380,8 +380,9 @@ def send_view(token, session, proxy):
         return False
 
 
+# ==================== تابع proxy_worker اصلاح شده ====================
 def proxy_worker():
-    """کارگر ویو زدن"""
+    """کارگر ویو زدن - نسخه اصلاح شده"""
     global active_proxies_count, blocked_proxies, socks5_proxies_used
     
     while True:
@@ -396,23 +397,27 @@ def proxy_worker():
             current_token = None
             views_with_this_proxy = 0
             
-            if DEBUG_MODE:
-                print(f" [🚀] Worker started: {proxy}")
+            print(f" [🚀] Worker started: {proxy}")
+            print(f" [*] Target: @{channel}/{post}")
             
             while consecutive_failures < MAX_CONSECUTIVE_FAILURES:
                 try:
                     if not current_token or not session:
+                        print(f" [*] Getting token from {proxy}...")
                         token_result, new_session = get_token(proxy)
                         
                         if token_result and new_session:
                             current_token = token_result
                             session = new_session
                             consecutive_failures = 0
+                            print(f" [✓] Token received from {proxy}")
                         else:
                             consecutive_failures += 1
+                            print(f" [✗] Token failed ({consecutive_failures}/{MAX_CONSECUTIVE_FAILURES})")
                             sleep(1)
                             continue
                     
+                    print(f" [*] Sending view with {proxy}...")
                     success = send_view(current_token, session, proxy)
                     
                     if success:
@@ -422,35 +427,38 @@ def proxy_worker():
                             update_stats(success=True)
                             socks5_proxies_used += 1
                         
-                        if views_with_this_proxy % 20 == 0:
-                            print(f" [✓] {views_with_this_proxy} views: {proxy}")
+                        print(f" [✓] View #{total_views_sent} sent with {proxy}")
                     else:
                         consecutive_failures += 1
                         with stats_lock:
                             update_stats(success=False)
+                        print(f" [✗] View failed ({consecutive_failures}/{MAX_CONSECUTIVE_FAILURES})")
                     
                     sleep(VIEW_DELAY)
                     
-                except:
+                except Exception as e:
                     consecutive_failures += 1
+                    print(f" [✗] Error: {e}")
                     sleep(1)
             
             with stats_lock:
                 active_proxies_count -= 1
                 blocked_proxies += 1
-            print(f" [⛔] Blocked after {views_with_this_proxy} views: {proxy}")
+            print(f" [⛔] Proxy blocked after {views_with_this_proxy} views: {proxy}")
             
-        except:
+        except Exception as e:
+            print(f" [⚠️] Worker error: {e}")
             sleep(1)
 
 
+# ==================== تابع start_bot اصلاح شده ====================
 def start_bot():
-    """مدیریت اصلی بات"""
+    """مدیریت اصلی بات - نسخه اصلاح شده"""
     global testing_complete
     
     while True:
         print("\n" + "="*60)
-        print(" 🚀 Starting Bot...")
+        print(" 🚀 Starting Bot Cycle...")
         print("="*60)
         
         # اسکرپ پروکسی
@@ -464,45 +472,41 @@ def start_bot():
         for proxy in socks5_proxies:
             proxy_queue.put(proxy)
         
-        print(f" [✓] Queue size: {proxy_queue.qsize()}")
-        print(f" [✓] Starting {MAX_TESTERS} testers...")
+        print(f" [✓] Test queue size: {proxy_queue.qsize()}")
         
-        # ایجاد تسترها
-        for i in range(MAX_TESTERS):
-            Thread(target=proxy_tester, daemon=True).start()
-            if i % 20 == 0:
-                sleep(0.1)
+        # ایجاد تسترها (اگر قبلاً ساخته نشده‌اند)
+        if active_count() < 50:
+            print(f" [✓] Starting {MAX_TESTERS} testers...")
+            for i in range(MAX_TESTERS):
+                Thread(target=proxy_tester, daemon=True).start()
+                if i % 20 == 0:
+                    sleep(0.1)
         
-        # منتظر ماندن برای پروکسی کارآمد
-        wait_time = 0
-        while working_proxies.qsize() < MIN_WORKING_PROXIES and wait_time < 60:
-            if socks5_proxies_tested > 0:
-                print(f" [*] Tested: {socks5_proxies_tested}, Working: {socks5_proxies_working}")
-            sleep(5)
-            wait_time += 5
-        
+        # **بخش مهم: شروع ویو زدن با پروکسی‌های موجود**
         if working_proxies.qsize() >= MIN_WORKING_PROXIES:
-            print(f"\n [🎯] Found {working_proxies.qsize()} working proxies!")
+            current_workers = active_proxies_count
+            needed_workers = min(THREADS, working_proxies.qsize())
             
-            # ایجاد workerها
-            worker_count = min(THREADS, working_proxies.qsize())
-            print(f" [🚀] Starting {worker_count} workers...")
-            
-            for i in range(worker_count):
-                Thread(target=proxy_worker, daemon=True).start()
-                sleep(0.05)
-            
-            print(f" [✓] Workers started! Est. rate: {worker_count/VIEW_DELAY:.0f} views/sec")
-        else:
-            print(" [⚠️] Not enough working proxies found!")
+            if current_workers < needed_workers:
+                new_workers = needed_workers - current_workers
+                print(f"\n [🚀] Starting {new_workers} new view workers...")
+                
+                for i in range(new_workers):
+                    Thread(target=proxy_worker, daemon=True).start()
+                    sleep(0.1)
+                
+                print(f" [✓] Total workers now: {active_proxies_count}")
+                print(f" [⚡] Estimated rate: {active_proxies_count/VIEW_DELAY:.0f} views/sec")
         
-        # ادامه تست
-        while proxy_queue.qsize() > 0:
-            sleep(10)
-            print(f" [*] Background testing: {proxy_queue.qsize()} remaining")
+        # نمایش وضعیت
+        print(f"\n [📊] Status:")
+        print(f"    • Tested: {socks5_proxies_tested}/{total_proxies_loaded}")
+        print(f"    • Working: {socks5_proxies_working}")
+        print(f"    • Active Workers: {active_proxies_count}")
+        print(f"    • Views Sent: {total_views_sent}")
         
-        print(" [✓] Test cycle complete!")
-        sleep(5)
+        # منتظر ماندن و ادامه
+        sleep(10)
 
 
 def check_views():
