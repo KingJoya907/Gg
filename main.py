@@ -8,7 +8,6 @@ try:
     from re import search, compile
     from datetime import datetime, timedelta
     from collections import deque
-    from queue import Queue
 except:
     os.system('pip install requests')
     os.system('pip install configparser')
@@ -19,9 +18,6 @@ USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 MAX_CONSECUTIVE_FAILURES = 3
 VIEW_DELAY = 1.0
 time_out = 15
-PROXY_TEST_TIMEOUT = 3
-MAX_TESTERS = 50
-MIN_WORKING_PROXIES = 5
 
 # ==================== REGEX ====================
 REGEX = compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
@@ -42,15 +38,10 @@ proxy_errors = 0
 token_errors = 0
 socks5_proxies_found = 0
 socks5_proxies_used = 0
-socks5_proxies_tested = 0
-socks5_proxies_working = 0
 views_per_minute = deque(maxlen=60)
 last_view_time = time()
 current_view_rate = 0
 total_scrap_cycles = 0
-total_proxies_loaded = 0
-active_proxies_count = 0
-blocked_proxies = 0
 
 # ==================== خواندن config.ini ====================
 errors = open('errors.txt', 'a+')
@@ -59,14 +50,13 @@ cfg.read("config.ini", encoding="utf-8")
 
 try:
     socks5 = cfg["SOCKS5"]
+    print(" [✓] SOCKS5 section loaded")
 except KeyError:
-    print(' [ ERROR ] config.ini not found or invalid!')
+    print(' [ ERROR ] SOCKS5 section not found in config.ini!')
     sleep(3)
     exit()
 
 socks5_proxies = []
-working_proxies = Queue()
-proxy_queue = Queue()
 channel, post, real_views = '', 0, '0'
 
 
@@ -105,13 +95,15 @@ def print_statistics():
         
         success_rate = (successful_views / total_views_sent * 100) if total_views_sent > 0 else 0
         
-        current_time = time()
-        views_in_last_minute = sum(1 for t, _ in views_per_minute if current_time - t <= 60)
+        # رفع خطای deque
+        with stats_lock:
+            views_copy = list(views_per_minute)
         
-        test_percent = (socks5_proxies_tested / total_proxies_loaded * 100) if total_proxies_loaded > 0 else 0
+        current_time = time()
+        views_in_last_minute = sum(1 for t, _ in views_copy if current_time - t <= 60)
         
         print("="*60)
-        print(" 🚀 TELEGRAM VIEW BOT - HYBRID EDITION 🚀".center(60))
+        print(" 🚀 TELEGRAM VIEW BOT - SOCKS5 ONLY 🚀".center(60))
         print("="*60)
         print()
         print(f" 📊 TARGET INFORMATION")
@@ -133,37 +125,39 @@ def print_statistics():
         print()
         print(f" 🌐 PROXY STATISTICS")
         print(f"    • Scrap Cycles: {total_scrap_cycles}")
-        print(f"    • Total Proxies Loaded: {format_number(total_proxies_loaded)}")
-        print(f"    • Proxies Tested: {format_number(socks5_proxies_tested)} ({test_percent:.1f}%)")
-        print(f"    • Working Proxies: {format_number(socks5_proxies_working)}")
-        print(f"    • Active Proxies: {active_proxies_count}")
-        print(f"    • Blocked Proxies: {blocked_proxies}")
+        print(f"    • Total Proxies Loaded: {format_number(socks5_proxies_found)}")
         print(f"    • Proxy Errors: {proxy_errors}")
         print(f"    • Token Errors: {token_errors}")
         print()
         print(f" 🔧 SYSTEM STATISTICS")
         print(f"    • Active Threads: {active_count()}")
         print(f"    • Max Threads: {THREADS}")
+        print(f"    • Timeout: {time_out}s")
         print()
         print("="*60)
         print("           Press Ctrl+C to stop the bot".center(60))
         print("="*60)
 
 
-# ==================== توابع اصلی (از کد قدیمی) ====================
+# ==================== توابع اصلی ====================
 def scrap(sources):
-    global socks5_proxies_found, total_proxies_loaded
+    global socks5_proxies_found, socks5_proxies
     
     for source in sources:
-        if source:
+        if source and source.strip():
             try:
-                response = requests.get(source, timeout=time_out)
+                response = requests.get(source.strip(), timeout=time_out)
                 
-                if tuple(REGEX.finditer(response.text)):
-                    for proxy in tuple(REGEX.finditer(response.text)):
-                        socks5_proxies.append(proxy.group(1))
-                        socks5_proxies_found += 1
-                        total_proxies_loaded += 1
+                if response.status_code == 200:
+                    matches = tuple(REGEX.finditer(response.text))
+                    if matches:
+                        for proxy in matches:
+                            proxy_str = proxy.group(1)
+                            socks5_proxies.append(proxy_str)
+                            socks5_proxies_found += 1
+                        print(f" [✓] Found {len(matches)} proxies")
+                    else:
+                        print(f" [✗] No proxies found")
             except Exception as e:
                 errors.write(f'{e}\n')
 
@@ -172,14 +166,23 @@ def start_scrap():
     global total_scrap_cycles, socks5_proxies
     
     socks5_proxies = []
-    sources = socks5.get("Sources").splitlines()
+    sources_list = [s for s in socks5.get("Sources").splitlines() if s.strip()]
     
-    thread = Thread(target=scrap, args=(sources,))
-    thread.start()
-    thread.join()
+    print(f"\n [*] Scraping {len(sources_list)} sources...")
     
-    total_scrap_cycles += 1
-    print(f" [✓] Found {len(socks5_proxies)} proxies")
+    threads = []
+    for source in sources_list:
+        thread = Thread(target=scrap, args=([source],))
+        thread.start()
+        threads.append(thread)
+    
+    for t in threads:
+        t.join()
+    
+    with stats_lock:
+        total_scrap_cycles += 1
+    
+    print(f" [✓] Found {len(socks5_proxies)} total proxies")
     return len(socks5_proxies) > 0
 
 
@@ -190,15 +193,24 @@ def get_token(proxy):
         response = session.get(
             f'https://t.me/{channel}/{post}',
             params={'embed': '1', 'mode': 'tme'},
-            headers={'referer': f'https://t.me/{channel}/{post}', 'user-agent': USER_AGENT},
-            proxies={'http': f'socks5://{proxy}', 'https': f'socks5://{proxy}'},
+            headers={
+                'referer': f'https://t.me/{channel}/{post}',
+                'user-agent': USER_AGENT
+            },
+            proxies={
+                'http': f'socks5://{proxy}',
+                'https': f'socks5://{proxy}'
+            },
             timeout=time_out)
         
         token = search('data-view="([^"]+)', response.text)
         if token:
             return token.group(1), session
-        return None, None
-    except:
+        return 2, None  # AttributeError
+    except requests.exceptions.RequestException:
+        return 1, None  # Proxy error
+    except Exception as e:
+        errors.write(f'{e}\n')
         return None, None
 
 
@@ -209,11 +221,21 @@ def send_view(token, session, proxy):
         response = session.get(
             'https://t.me/v/',
             params={'views': str(token)},
-            cookies={'stel_dt': '-240', 'stel_web_auth': 'https%3A%2F%2Fweb.telegram.org%2Fz%2F',
-                    'stel_ssid': cookies_dict.get('stel_ssid'), 'stel_on': cookies_dict.get('stel_on')},
-            headers={'referer': f'https://t.me/{channel}/{post}?embed=1&mode=tme',
-                    'user-agent': USER_AGENT, 'x-requested-with': 'XMLHttpRequest'},
-            proxies={'http': f'socks5://{proxy}', 'https': f'socks5://{proxy}'},
+            cookies={
+                'stel_dt': '-240',
+                'stel_web_auth': 'https%3A%2F%2Fweb.telegram.org%2Fz%2F',
+                'stel_ssid': cookies_dict.get('stel_ssid', None),
+                'stel_on': cookies_dict.get('stel_on', None)
+            },
+            headers={
+                'referer': f'https://t.me/{channel}/{post}?embed=1&mode=tme',
+                'user-agent': USER_AGENT,
+                'x-requested-with': 'XMLHttpRequest'
+            },
+            proxies={
+                'http': f'socks5://{proxy}',
+                'https': f'socks5://{proxy}'
+            },
             timeout=time_out)
         
         return response.status_code == 200 and response.text == 'true'
@@ -221,78 +243,28 @@ def send_view(token, session, proxy):
         return False
 
 
-def proxy_worker():
-    global active_proxies_count, blocked_proxies, socks5_proxies_used
+def control(proxy):
+    global proxy_errors, token_errors
     
-    while True:
-        try:
-            if working_proxies.empty():
-                sleep(1)
-                continue
-            
-            proxy = working_proxies.get()
-            
-            active_proxies_count += 1
-            consecutive_failures = 0
-            views_with_this_proxy = 0
-            
-            while consecutive_failures < MAX_CONSECUTIVE_FAILURES:
-                token, session = get_token(proxy)
-                
-                if not token:
-                    consecutive_failures += 1
-                    sleep(1)
-                    continue
-                
-                success = send_view(token, session, proxy)
-                
-                if success:
-                    consecutive_failures = 0
-                    views_with_this_proxy += 1
-                    socks5_proxies_used += 1
-                    update_stats(success=True)
-                else:
-                    consecutive_failures += 1
-                    update_stats(success=False)
-                
-                sleep(VIEW_DELAY)
-            
-            active_proxies_count -= 1
-            blocked_proxies += 1
-            
-        except Exception as e:
-            sleep(1)
-
-
-def test_proxy(proxy):
-    try:
-        session = requests.session()
-        response = session.get(
-            'http://httpbin.org/ip',
-            proxies={'http': f'socks5://{proxy}', 'https': f'socks5://{proxy}'},
-            timeout=PROXY_TEST_TIMEOUT)
-        return response.status_code == 200
-    except:
-        return False
-
-
-def proxy_tester():
-    global socks5_proxies_tested, socks5_proxies_working
+    token_data, session = get_token(proxy)
     
-    while True:
-        try:
-            if proxy_queue.empty():
-                sleep(0.5)
-                continue
-            
-            proxy = proxy_queue.get()
-            socks5_proxies_tested += 1
-            
-            if test_proxy(proxy):
-                working_proxies.put(proxy)
-                socks5_proxies_working += 1
-        except:
-            sleep(1)
+    if token_data == 2:
+        with stats_lock:
+            token_errors += 1
+            update_stats(success=False)
+    elif token_data == 1:
+        with stats_lock:
+            proxy_errors += 1
+            update_stats(success=False)
+    elif token_data:
+        success = send_view(token_data, session, proxy)
+        if success:
+            with stats_lock:
+                update_stats(success=True)
+        else:
+            with stats_lock:
+                proxy_errors += 1
+                update_stats(success=False)
 
 
 def start_view():
@@ -302,33 +274,28 @@ def start_view():
         print("="*60)
         
         # اسکرپ پروکسی
-        if start_scrap():
-            for proxy in socks5_proxies:
-                proxy_queue.put(proxy)
-            print(f" [✓] Added {len(socks5_proxies)} proxies to test queue")
+        if not start_scrap():
+            print(" [⚠️] No proxies found! Waiting...")
+            sleep(10)
+            continue
         
-        # ایجاد تسترها
-        for i in range(MAX_TESTERS):
-            Thread(target=proxy_tester, daemon=True).start()
-        
-        # منتظر ماندن برای پروکسی‌های کارآمد
-        wait_time = 0
-        while working_proxies.qsize() < MIN_WORKING_PROXIES and wait_time < 30:
-            sleep(2)
-            wait_time += 2
-            print(f" [*] Waiting for working proxies... ({working_proxies.qsize()}/{MIN_WORKING_PROXIES})")
-        
-        # شروع workerها
-        if working_proxies.qsize() >= MIN_WORKING_PROXIES:
-            workers_count = min(THREADS, working_proxies.qsize())
-            print(f" [🚀] Starting {workers_count} workers...")
+        # شروع threadها برای ویو زدن
+        threads = []
+        for proxy in socks5_proxies:
+            thread = Thread(target=control, args=(proxy,))
+            threads.append(thread)
             
-            for i in range(workers_count):
-                Thread(target=proxy_worker, daemon=True).start()
+            while active_count() > THREADS:
+                sleep(0.05)
             
-            print(f" [✓] Workers started!")
+            thread.start()
         
-        sleep(10)
+        # منتظر ماندن برای اتمام
+        for t in threads:
+            t.join()
+        
+        print(f" [✓] Cycle complete! Views sent: {total_views_sent}")
+        sleep(2)
 
 
 def check_views():
@@ -339,7 +306,10 @@ def check_views():
             response = requests.get(
                 f'https://t.me/{channel}/{post}',
                 params={'embed': '1', 'mode': 'tme'},
-                headers={'referer': f'https://t.me/{channel}/{post}', 'user-agent': USER_AGENT})
+                headers={
+                    'referer': f'https://t.me/{channel}/{post}',
+                    'user-agent': USER_AGENT
+                })
             
             views = search('<span class="tgme_widget_message_views">([^<]+)', response.text)
             if views:
@@ -354,7 +324,7 @@ def check_views():
 system('cls' if name == 'nt' else 'clear')
 
 print("\n" + "="*60)
-print(" 🚀 TELEGRAM VIEW BOT - HYBRID EDITION 🚀".center(60))
+print(" 🚀 TELEGRAM VIEW BOT - SOCKS5 ONLY 🚀".center(60))
 print("="*60)
 print()
 
@@ -371,6 +341,7 @@ print("\n" + "="*60)
 print(" 🚀 Starting Bot...")
 print("="*60 + "\n")
 
+# شروع threadها
 Thread(target=start_view, daemon=True).start()
 Thread(target=check_views, daemon=True).start()
 Thread(target=print_statistics, daemon=True).start()
@@ -384,5 +355,6 @@ except KeyboardInterrupt:
     print("="*60)
     print(f"\n Total Views Sent: {format_number(total_views_sent)}")
     print(f" Successful Views: {format_number(successful_views)}")
-    print(f" Working Proxies: {socks5_proxies_working}")
+    print(f" Success Rate: {(successful_views/total_views_sent*100) if total_views_sent>0 else 0:.1f}%")
+    print(f" Proxies Found: {format_number(socks5_proxies_found)}")
     print("\n" + "="*60)
