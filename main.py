@@ -8,11 +8,10 @@ import logging
 import time
 import sys
 from datetime import datetime
-import numpy as np   # برای poisson delay
 
 logging.basicConfig(level=logging.INFO)
 
-# لیست User-Agent واقعی‌تر (۲۰۲۵–۲۰۲۶)
+# لیست User-Agent واقعی
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
@@ -20,7 +19,6 @@ USER_AGENTS = [
     "Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.6668.71 Mobile Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-    # می‌تونی ۲۰–۳۰ تا دیگه اضافه کنی
 ]
 
 REGEX = compile(
@@ -34,6 +32,7 @@ REGEX = compile(
     r")(?:\D|$)"
 )
 
+# ==================== خواندن config.ini ====================
 def read_config():
     config = configparser.ConfigParser()
     config.read('config.ini', encoding='utf-8')
@@ -44,19 +43,21 @@ def read_config():
         print(f" [✓] Found {len(sources)} proxy sources")
     else:
         print(" [❌] SOCKS5 section not found!")
+        print(" Creating default config.ini...")
         with open('config.ini', 'w', encoding='utf-8') as f:
             f.write("""[SOCKS5]
 Sources = 
-    https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/socks5/data.txt
-    https://api.proxyscrape.com/v4/free-proxy-list/get?request=displayproxies&protocol=socks5&timeout=10000
-    https://www.proxy-list.download/api/v1/get?type=socks5
+    https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt
+    https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks5.txt
+    https://raw.githubusercontent.com/roosterkid/openproxylist/main/SOCKS5_RAW.txt
 """)
         return read_config()
     
     return sources
 
+# ==================== اسکرپ پروکسی ====================
 async def scrape_proxies(sources):
-    proxies = set()  # برای جلوگیری از تکراری
+    proxies = set()
     print("\n [*] Scraping proxies...")
     
     async with aiohttp.ClientSession() as session:
@@ -77,6 +78,7 @@ async def scrape_proxies(sources):
     print(f"\n [✓] Total unique proxies: {len(proxies)}")
     return proxies
 
+# ==================== کلاس اصلی ویو زدن ====================
 class TelegramViews:
     def __init__(self, channel: str, posts: list, views_per_post: int, proxy_list: list):
         self.views_per_post = views_per_post
@@ -129,8 +131,8 @@ class TelegramViews:
                 timeout = aiohttp.ClientTimeout(total=15, connect=8)
 
                 async with aiohttp.ClientSession(cookie_jar=jar, connector=connector) as sess:
-                    # delay واقعی‌تر (poisson-like \~ exponential)
-                    await asyncio.sleep(np.random.exponential(2.5) + random.uniform(1.2, 4.8))
+                    # delay ساده اما موثر
+                    await asyncio.sleep(random.uniform(3, 7))
 
                     async with sess.get(
                         f'https://t.me/{self.channel}/{post}?embed=1&mode=tme',
@@ -158,7 +160,7 @@ class TelegramViews:
 
                         token = token_match.group(1)
 
-                        await asyncio.sleep(random.uniform(0.7, 2.3))  # human-like pause
+                        await asyncio.sleep(random.uniform(1, 3))
 
                         async with sess.post(
                             f'https://t.me/v/?views={token}',
@@ -202,7 +204,7 @@ class TelegramViews:
         for post in self.posts:
             for _ in range(self.views_per_post):
                 tasks.append(asyncio.create_task(self.view_post(post)))
-                await asyncio.sleep(random.uniform(0.08, 0.35))  # جلوگیری از burst خیلی شدید
+                await asyncio.sleep(random.uniform(0.1, 0.4))
 
         await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -231,14 +233,14 @@ def parse_posts(inp: str):
 
 async def main():
     print("\n" + "═"*70)
-    print(" TELEGRAM VIEWS BOOSTER 2026 – RESIDENTIAL MODE ".center(70))
+    print(" TELEGRAM VIEWS BOOSTER 2026 – STABLE EDITION ".center(70))
     print("═"*70)
 
     sources = read_config()
     proxies = await scrape_proxies(sources)
 
     if len(proxies) < 50:
-        print("\n [!!!] پروکسی خیلی کم است – حداقل ۲۰۰–۵۰۰ تا residential نیاز است")
+        print("\n [!!!] پروکسی خیلی کم است – حداقل ۲۰۰–۵۰۰ تا نیاز است")
         return
 
     channel = input("\nنام کانال (بدون @): ").strip()
