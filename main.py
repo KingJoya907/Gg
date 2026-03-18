@@ -1,201 +1,137 @@
-import os
-try:
- import requests
- from time import sleep
- from configparser import ConfigParser
- from os import system, name
- from threading import Thread, active_count
- from re import search, compile
-except:
- os.system('pip install requests')
- os.system('pip install configparser')
+import aiohttp
+import asyncio
+from re import search, compile
+from aiohttp_socks import ProxyConnector
+import logging
+import time
+import sys
 
-THREADS = 500
-PROXIES_TYPES = ('http', 'socks4', 'socks5')
-USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36'
+logging.basicConfig(level=logging.INFO)
 
-REGEX = compile(r"(?:^|\D)?(("+ r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
-                + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
-                + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
-                + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
-                + r"):" + (r"(?:\d|[1-9]\d{1,3}|[1-5]\d{4}|6[0-4]\d{3}"
-                + r"|65[0-4]\d{2}|655[0-2]\d|6553[0-5])")
-                + r")(?:\D|$)")
+user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36"
+REGEX = compile(
+    r"(?:^|\D)?(("
+    + r"(?:[1-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
+    + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
+    + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
+    + r"\." + r"(?:\d|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])"
+    + r"):" + r"(?:\d|[1-9]\d{1,3}|[1-5]\d{4}|6[0-4]\d{3}"
+    + r"|65[0-4]\d{2}|655[0-2]\d|6553[0-5])"
+    + r")(?:\D|$)"
+)
 
-errors = open('errors.txt', 'a+')
-cfg = ConfigParser(interpolation=None)
-cfg.read("config.ini", encoding="utf-8")
+class Telegram:
+    def __init__(self, channel: str, posts: list, tasks: int) -> None:
+        self.tasks = tasks
+        self.channel = channel
+        self.posts = posts
+        self.cookie_error = 0
+        self.success_sent = 0
+        self.failed_sent = 0
+        self.token_error = 0
+        self.proxy_error = 0
+        self.total_views = tasks * len(posts)
+        self.completed = 0
 
-http, socks4, socks5 = '', '', ''
-try:
- http, socks4, socks5 = cfg["HTTP"], cfg["SOCKS4"], cfg["SOCKS5"]
-except KeyError:
- print(' [ OUTPUT ] Error | config.ini not found!')
- sleep(3)
- exit()
+    def show_progress(self):
+        percent = (self.completed / self.total_views) * 100
+        bar = '█' * int(percent/2) + '░' * (50 - int(percent/2))
+        print(f"\r[{bar}] {percent:.1f}% | ✅ {self.success_sent} | ❌ {self.failed_sent} | ⚠️ {self.proxy_error}", end='', flush=True)
 
-http_proxies, socks4_proxies, socks5_proxies = [], [], []
-proxy_errors, token_errors = 0, 0
-channel, post, time_out, real_views = '', 0, 15, 0
-
-
-def scrap(sources, _proxy_type):
-    for source in sources:
-        if source:
+    async def request(self, proxy: str, proxy_type: str, post: int, retries: int = 3):
+        connector = ProxyConnector.from_url(f'socks5://{proxy}')
+        jar = aiohttp.CookieJar(unsafe=True)
+        for attempt in range(retries):
             try:
-                response = requests.get(source, timeout=time_out)
+                async with aiohttp.ClientSession(cookie_jar=jar, connector=connector) as session:
+                    async with session.get(
+                        f'https://t.me/{self.channel}/{post}?embed=1&mode=tme', 
+                        headers={
+                            'referer': f'https://t.me/{self.channel}/{post}',
+                            'user-agent': user_agent
+                        }, timeout=aiohttp.ClientTimeout(total=10)
+                    ) as embed_response:
+                        if jar.filter_cookies(embed_response.url).get('stel_ssid'):
+                            html = await embed_response.text()
+                            views_token = search('data-view="([^"]+)"', html)
+                            if views_token:
+                                views_response = await session.post(
+                                    'https://t.me/v/?views=' + views_token.group(1), 
+                                    headers={
+                                        'referer': f'https://t.me/{self.channel}/{post}?embed=1&mode=tme',
+                                        'user-agent': user_agent, 
+                                        'x-requested-with': 'XMLHttpRequest'
+                                    }, timeout=aiohttp.ClientTimeout(total=10)
+                                )
+                                self.completed += 1
+                                if (await views_response.text() == "true" and views_response.status == 200):
+                                    self.success_sent += 1
+                                else:
+                                    self.failed_sent += 1
+                                self.show_progress()
+                                return
+                            else:
+                                self.token_error += 1
+                        else:
+                            self.cookie_error += 1
             except Exception as e:
-                errors.write(f'{e}\n')
+                logging.error(f"Attempt {attempt+1}/{retries} failed: {e}")
+                if attempt + 1 == retries:
+                    self.proxy_error += 1
+                    self.completed += 1
+                    self.show_progress()
+            finally:
+                jar.clear()
+            await asyncio.sleep(1)
 
-            if tuple(REGEX.finditer(response.text)):
-                for proxy in tuple(REGEX.finditer(response.text)):
-                    if _proxy_type == 'http':
-                        http_proxies.append(proxy.group(1))
-                    elif _proxy_type == 'socks4':
-                        socks4_proxies.append(proxy.group(1))
-                    elif _proxy_type == 'socks5':
-                        socks5_proxies.append(proxy.group(1))
+    async def run_rotated_task(self, proxy, proxy_type):
+        print(f"\n🚀 Starting {self.total_views} views on @{self.channel} posts: {self.posts}")
+        print(f"🔧 Using proxy: {proxy}\n")
+        
+        tasks = []
+        for post in self.posts:
+            tasks.extend([asyncio.create_task(self.request(proxy, proxy_type, post)) for _ in range(self.tasks)])
+        
+        await asyncio.gather(*tasks, return_exceptions=True)
+        
+        print(f"\n\n📊 FINAL RESULTS:")
+        print(f"   ✅ Success: {self.success_sent}")
+        print(f"   ❌ Failed: {self.failed_sent}")
+        print(f"   ⚠️ Proxy Errors: {self.proxy_error}")
+        print(f"   🍪 Cookie Errors: {self.cookie_error}")
+        print(f"   🔑 Token Errors: {self.token_error}")
 
+def parse_posts(post_input):
+    posts = set()
+    ranges = post_input.split(',')
+    for r in ranges:
+        r = r.strip()
+        if '-' in r:
+            start, end = map(int, r.split('-'))
+            posts.update(range(start, end + 1))
+        else:
+            posts.add(int(r))
+    return sorted(list(posts))
 
-def start_scrap():
-    threads = []
-    for i in (http_proxies, socks4_proxies, socks5_proxies):
-        i.clear()
+async def main():
+    print("\n" + "="*50)
+    print("🚀 TELEGRAM AUTO VIEWS - CLI VERSION")
+    print("="*50)
+    
+    channel = input("Channel (without @): ").strip()
+    post_input = input("Post numbers (e.g., 1-10 or 4,5,6-10): ").strip()
+    posts = parse_posts(post_input)
+    proxy = input("Proxy (user:password@host:port): ").strip()
+    views = int(input("Number of views per post: ").strip())
+    
+    print("\n" + "="*50)
+    api = Telegram(channel, posts, views)
+    await api.run_rotated_task(proxy, "socks5")
 
-    for i in ((http.get("Sources").splitlines(), 'http'),
-              (socks4.get("Sources").splitlines(), 'socks4'),
-              (socks5.get("Sources").splitlines(), 'socks5')):
-
-        thread = Thread(target=scrap, args=(i[0], i[1]))
-        threads.append(thread)
-        thread.start()
-
-    for t in threads:
-        t.join()
-
-
-def get_token(proxy, proxy_type):
+if __name__ == "__main__":
     try:
-        session = requests.session()
-
-        response = session.get(
-            f'https://t.me/{channel}/{post}',
-            params={'embed': '1', 'mode': 'tme'},
-            headers={
-                'referer': f'https://t.me/{channel}/{post}',
-                'user-agent': USER_AGENT
-            },
-            proxies={
-                'http': f'{proxy_type}://{proxy}',
-                'https': f'{proxy_type}://{proxy}'
-            },
-            timeout=time_out)
-
-        return search('data-view="([^"]+)', response.text).group(1), session
-
-    except AttributeError:
-        return 2
-    except requests.exceptions.RequestException:
-        return 1
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n\n⚠️ Stopped by user")
     except Exception as e:
-        return errors.write(f'{e}\n')
-
-
-def send_view(token, session, proxy, proxy_type):
-    try:
-        cookies_dict = session.cookies.get_dict()
-
-        response = session.get(
-            'https://t.me/v/',
-            params={'views': str(token)},
-            cookies={
-                'stel_dt': '-240',
-                'stel_web_auth': 'https%3A%2F%2Fweb.telegram.org%2Fz%2F',
-                'stel_ssid': cookies_dict.get('stel_ssid', None),
-                'stel_on': cookies_dict.get('stel_on', None)
-            },
-            headers={
-                'referer': f'https://t.me/{channel}/{post}?embed=1&mode=tme',
-                'user-agent': USER_AGENT,
-                'x-requested-with': 'XMLHttpRequest'
-            },
-            proxies={
-                'http': f'{proxy_type}://{proxy}',
-                'https': f'{proxy_type}://{proxy}'
-            },
-            timeout=time_out)
-
-        return True if (response.status_code == 200 and response.text == 'true') else False
-
-    except requests.exceptions.RequestException:
-        return 1
-    except Exception:
-        pass
-
-
-def control(proxy, proxy_type):
-    global proxy_errors, token_errors
-
-    token_data = get_token(proxy, proxy_type)
-
-    if token_data == 2:
-        token_errors += 1
-    elif token_data == 1:
-        proxy_errors += 1
-    elif token_data:
-        send_data = send_view(token_data[0], token_data[1], proxy, proxy_type)
-        if send_data == 1:
-            proxy_errors += 1
-
-
-def start_view():
-    c, threads = 0, []
-    start_scrap()
-
-    for i in [http_proxies, socks4_proxies, socks5_proxies]:
-        for j in i:
-            thread = Thread(target=control, args=(j, PROXIES_TYPES[c]))
-            threads.append(thread)
-
-            while active_count() > THREADS:
-                sleep(0.05)
-
-            thread.start()
-
-        c += 1
-        sleep(2)
-
-    for t in threads:
-        t.join()
-        start_view()
-
-
-def check_views():
-    global real_views
-
-    while True:
-        try:
-            telegram_request = requests.get(
-                f'https://t.me/{channel}/{post}',
-                params={'embed': '1', 'mode': 'tme'},
-                headers={
-                    'referer': f'https://t.me/{channel}/{post}',
-                    'user-agent': USER_AGENT
-                })
-
-            real_views = search(
-                '<span class="tgme_widget_message_views">([^<]+)',
-                telegram_request.text).group(1)
-
-            sleep(2)
-
-        except:
-            pass
-
-
-system('cls' if name == 'nt' else 'clear')
-
-channel, post = input("TeleGram View Post URL ==> ").replace('https://t.me/', '').split('/')
-
-Thread(target=start_view).start()
-Thread(target=check_views).start()
+        print(f"\n❌ Error: {e}")
